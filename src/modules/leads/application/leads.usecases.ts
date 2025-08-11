@@ -12,8 +12,8 @@ import {
 import { Lead, LeadStatus } from "@prisma/client";
 import { getCache, setCache } from "../../../shared/utils/cache.util.js";
 import { LeadsRepositoryInterface } from "../domain/repository.interface.js";
-import { GoogleMapsRepository } from "../../../services/google/maps.repository.js";
 import { CloudinaryRepository } from "../../../services/cloudinary.repository.js";
+import { GoogleMapsRepository } from "../../../services/google/maps.repository.js";
 import { normalizeInternationalPhone, normalizeTextValue } from "../../../shared/utils/utils.shared.js";
  
 export interface GooglePhotoResult {
@@ -21,7 +21,6 @@ export interface GooglePhotoResult {
   public_id: string;
   contentType: string;
 }
-
 export class LeadsUseCases {
   private googleMapsRepository: GoogleMapsRepository;
   private cloudinaryRepository: CloudinaryRepository;
@@ -132,8 +131,8 @@ export class LeadsUseCases {
         (typeof normalizedUpdate.phone !== 'undefined' && phoneToCheck !== existingLead.phone) ||
         (typeof normalizedUpdate.email !== 'undefined' && emailToCheck !== existingLead.email)
       ) {
-        const duplicate = await this.leadsRepository.checkDuplicateLead(phoneToCheck, emailToCheck);
-        if (duplicate && duplicate.id !== normalizedUpdate.id) throw new Error('Ya existe un lead con el mismo teléfono o email');
+        const duplicate = await this.leadsRepository.checkDuplicateLead(phoneToCheck, emailToCheck, normalizedUpdate.id);
+        if (duplicate) throw new Error('Ya existe un lead con el mismo teléfono o email');
       }
 
       return await this.leadsRepository.updateLead(normalizedUpdate);
@@ -274,48 +273,13 @@ export class LeadsUseCases {
   /**
    * Verificar lead duplicado
   */
-  async checkDuplicateLead(phone: string, email?: string): Promise<Lead | null> {
+  async checkDuplicateLead(phone: string, email?: string): Promise<boolean> {
     try {
-      if (!phone) {
-        throw new Error('Teléfono requerido');
-      }
-
-      return await this.leadsRepository.checkDuplicateLead(phone, email);
+      const normalizedPhone = normalizeInternationalPhone(phone) || phone;
+      const duplicate = await this.leadsRepository.checkDuplicateLead(normalizedPhone, email);
+      return duplicate;
     } catch (error) {
       console.error('Error in checkDuplicateLead use case:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Fusionar leads duplicados
-  */
-  async mergeDuplicateLeads(primaryLeadId: number, duplicateLeadIds: number[]): Promise<Lead> {
-    try {
-      if (!primaryLeadId || primaryLeadId <= 0) {
-        throw new Error('ID de lead principal inválido');
-      }
-
-      if (!duplicateLeadIds || duplicateLeadIds.length === 0) {
-        throw new Error('IDs de leads duplicados requeridos');
-      }
-
-      // Verificar que todos los leads existen
-      const primaryLead = await this.leadsRepository.getLeadById(primaryLeadId);
-      if (!primaryLead) {
-        throw new Error('Lead principal no encontrado');
-      }
-
-      for (const duplicateId of duplicateLeadIds) {
-        const duplicateLead = await this.leadsRepository.getLeadById(duplicateId);
-        if (!duplicateLead) {
-          throw new Error(`Lead duplicado con ID ${duplicateId} no encontrado`);
-        }
-      }
-
-      return await this.leadsRepository.mergeDuplicateLeads(primaryLeadId, duplicateLeadIds);
-    } catch (error) {
-      console.error('Error in mergeDuplicateLeads use case:', error);
       throw error;
     }
   }

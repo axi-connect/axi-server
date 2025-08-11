@@ -249,11 +249,4 @@ export class GoogleMapsRepository {
       throw new Error(`Error al geocodificar la dirección: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
-
-  /**
-   * Valida si la API key está configurada
-   */
-  isApiKeyConfigured(): boolean {
-    return !!this.apiKey;
-  }
 } 

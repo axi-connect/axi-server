@@ -8,7 +8,6 @@ import {
 import { Request, Response } from "express";
 import { LeadsUseCases } from "../application/leads.usecases.js";
 import { ResponseDto } from "../../../shared/dto/response.dto.js";
-
 export class LeadsController {
     constructor(private leadsUseCases: LeadsUseCases) {}
 
@@ -159,26 +158,9 @@ export class LeadsController {
     checkDuplicateLead = async (req: Request, res: Response) => {
         try {
             const { phone, email } = req.query;
-            const duplicate = await this.leadsUseCases.checkDuplicateLead(phone as string, email as string);
-            
-            const message = duplicate ? 'Lead duplicado encontrado' : 'No se encontraron leads duplicados';
-            const response = new ResponseDto(true, message, duplicate, 200);
-            res.status(200).json(response);
-        } catch (error: any) {
-            const response = new ResponseDto(false, error.message, null, 400);
-            res.status(400).json(response);
-        }
-    };
-
-    /**
-     * Fusionar leads duplicados
-    */
-    mergeDuplicateLeads = async (req: Request, res: Response) => {
-        try {
-            const { primaryLeadId, duplicateLeadIds } = req.body;
-            const mergedLead = await this.leadsUseCases.mergeDuplicateLeads(primaryLeadId, duplicateLeadIds);
-            
-            const response = new ResponseDto(true, 'Leads duplicados fusionados exitosamente', mergedLead, 200);
+            const isDuplicate = await this.leadsUseCases.checkDuplicateLead(phone as string, email as string);
+            const message = isDuplicate ? 'Lead duplicado encontrado' : 'No se encontraron leads duplicados';
+            const response = new ResponseDto(true, message, isDuplicate, 200);
             res.status(200).json(response);
         } catch (error: any) {
             const response = new ResponseDto(false, error.message, null, 400);
@@ -189,24 +171,24 @@ export class LeadsController {
     /**
      * Calcular score de lead
     */
-    calculateLeadScore = async (req: Request, res: Response): Promise<void> => {
+    calculateLeadScore = async (req: Request, res: Response) => {
         try {
-        const leadId = parseInt(req.params.id);
-        const lead = await this.leadsUseCases.getLeadById(leadId);
-        
-        if (!lead) {
-            const response = new ResponseDto(false, 'Lead no encontrado', null, 404);
-            res.status(404).json(response);
-            return;
-        }
+            const leadId = parseInt(req.params.id);
+            const lead = await this.leadsUseCases.getLeadById(leadId);
+            
+            if (!lead) {
+                const response = new ResponseDto(false, 'Lead no encontrado', null, 404);
+                res.status(404).json(response);
+                return;
+            }
 
-        const score = await this.leadsUseCases.calculateLeadScore(lead);
-        
-        const response = new ResponseDto(true, 'Score del lead calculado exitosamente', { lead, score }, 200);
-        res.status(200).json(response);
+            const score = await this.leadsUseCases.calculateLeadScore(lead);
+            
+            const response = new ResponseDto(true, 'Score del lead calculado exitosamente', { lead, score }, 200);
+            res.status(200).json(response);
         } catch (error: any) {
-        const response = new ResponseDto(false, error.message, null, 400);
-        res.status(400).json(response);
+            const response = new ResponseDto(false, error.message, null, 400);
+            res.status(400).json(response);
         }
     };
 }

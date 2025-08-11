@@ -1,14 +1,11 @@
-import { Lead } from "@prisma/client";
 import { 
-  CreateLeadInterface, 
-  UpdateLeadInterface, 
-  LeadSearchInterface,
-  GoogleMapsSearchInterface,
-  GoogleMapsPlaceInterface,
-  LeadSummaryDTO,
   LeadDetailDTO,
+  LeadSummaryDTO,
+  UpdateLeadInterface, 
+  CreateLeadInterface, 
+  LeadSearchInterface
 } from "./leads.interface.js";
-
+import { Lead } from "@prisma/client";
 export interface LeadsRepositoryInterface {
   // Operaciones CRUD básicas
   createLead(lead: CreateLeadInterface): Promise<Lead>;
@@ -19,11 +16,10 @@ export interface LeadsRepositoryInterface {
   updateLead(lead: UpdateLeadInterface): Promise<Lead>;
   deleteLead(id: number): Promise<boolean>;
   
-  // Operaciones de Google Maps / relaciones
+  // Operaciones relacionales modelo Company
   linkLeadToCompany(leadId: number, companyId: number): Promise<void>;
   linkLeadsToCompany(leadIds: number[], companyId: number): Promise<void>;
   
   // Operaciones de deduplicación
-  checkDuplicateLead(phone: string, email?: string): Promise<Lead | null>;
-  mergeDuplicateLeads(primaryLeadId: number, duplicateLeadIds: number[]): Promise<Lead>;
+  checkDuplicateLead(phone: string, email?: string, excludeId?: number): Promise<boolean>;
 } 

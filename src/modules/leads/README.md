@@ -62,7 +62,6 @@ src/modules/leads/
 
 ### Deduplicación
 - `GET /leads/check-duplicate` - Verificar lead duplicado
-- `POST /leads/merge-duplicates` - Fusionar leads duplicados
 
 ### Análisis
 - `GET /leads/:id/score` - Calcular score de un lead

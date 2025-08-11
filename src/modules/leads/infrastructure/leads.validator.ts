@@ -105,18 +105,6 @@ export class LeadsValidator {
     companyId: Joi.number().positive().optional(),
   });
 
-  private static mergeLeadsSchema = Joi.object({
-    primaryLeadId: Joi.number().positive().required().messages({
-      'number.base': 'ID del lead principal inválido',
-      'number.positive': 'ID del lead principal inválido',
-      'any.required': 'ID del lead principal requerido'
-    }),
-    duplicateLeadIds: Joi.array().items(Joi.number().positive()).min(1).required().messages({
-      'array.min': 'IDs de leads duplicados requeridos',
-      'any.required': 'IDs de leads duplicados requeridos'
-    })
-  });
-
   /**
    * Validar datos para crear un lead
   */
@@ -186,22 +174,6 @@ export class LeadsValidator {
   */
   static validateGoogleMapsSave(req: Request, res: Response, next: NextFunction): void {
     const { error } = LeadsValidator.googleMapsSaveSchema.validate(req.body, { abortEarly: false });
-    
-    if (error) {
-      const errorMessage = error.details.map(detail => detail.message).join(', ');
-      const response = new ResponseDto(false, errorMessage, null, 400);
-      res.status(400).json(response);
-      return;
-    }
-
-    next();
-  }
-
-  /**
-   * Validar datos para fusionar leads
-   */
-  static validateMergeLeads(req: Request, res: Response, next: NextFunction): void {
-    const { error } = LeadsValidator.mergeLeadsSchema.validate(req.body, { abortEarly: false });
     
     if (error) {
       const errorMessage = error.details.map(detail => detail.message).join(', ');

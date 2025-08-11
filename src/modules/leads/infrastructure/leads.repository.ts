@@ -7,8 +7,6 @@ import {
 } from "../domain/leads.interface.js";
 import { PrismaClient, Lead } from "@prisma/client";
 import { LeadsRepositoryInterface } from "../domain/repository.interface.js";
-import { normalizeInternationalPhone } from "../../../shared/utils/utils.shared.js";
-
 export class LeadsRepository implements LeadsRepositoryInterface {
   private db: PrismaClient;
 
@@ -223,54 +221,20 @@ export class LeadsRepository implements LeadsRepositoryInterface {
     }
   }
 
-  async checkDuplicateLead(phone: string, email?: string): Promise<Lead | null> {
+  async checkDuplicateLead(phone: string, email?: string, excludeId?: number): Promise<boolean> {
     try {
-      const normalizedPhone = normalizeInternationalPhone(phone) || phone;
       const where: any = {
         OR: [
-          { phone: normalizedPhone },
+          { phone },
           ...(email ? [{ email }] : [])
-        ]
+        ],
+        ...(excludeId ? { NOT: { id: excludeId } } : {})
       };
 
-      return await this.db.lead.findFirst({ where });
+      const found = await this.db.lead.findFirst({ where });
+      return Boolean(found);
     } catch (error) {
       console.error('Error checking duplicate lead:', error);
-      throw error;
-    }
-  }
-
-  async mergeDuplicateLeads(primaryLeadId: number, duplicateLeadIds: number[]): Promise<Lead> {
-    try {
-      // Obtener el lead principal
-      const primaryLead = await this.getLeadById(primaryLeadId);
-      if (!primaryLead) {
-        throw new Error('Lead principal no encontrado');
-      }
-
-      // Mover todos los logs de comunicación y relaciones de los leads duplicados al principal
-      for (const duplicateId of duplicateLeadIds) {
-        // Mover logs de comunicación (MessageLog) a la nueva referencia
-        await (this.db as any).messageLog.updateMany({
-          where: { entityType: 'Lead', entityId: duplicateId },
-          data: { entityId: primaryLeadId }
-        } as any);
-
-        // Mover relaciones con empresas
-        await this.db.companyLeads.updateMany({
-          where: { leadId: duplicateId },
-          data: { leadId: primaryLeadId }
-        } as any);
-
-        // Eliminar el lead duplicado
-        await this.db.lead.delete({
-          where: { id: duplicateId }
-        });
-      }
-
-      return await this.getLeadById(primaryLeadId) as Lead;
-    } catch (error) {
-      console.error('Error merging duplicate leads:', error);
       throw error;
     }
   }
