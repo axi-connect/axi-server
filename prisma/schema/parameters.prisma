@@ -1,0 +1,130 @@
+model Reminder{
+  id          Int       @id @default(autoincrement())
+  lead_id     Int?
+  client_id   Int?
+  company_id  Int
+  periodicity periodicity
+  message     String
+  channel_id  String
+  channel     channel
+  date        DateTime
+  days        days[]
+  lead        Lead?     @relation(fields: [lead_id], references: [id])
+  client      Client?   @relation(fields: [client_id], references: [id])
+  company     Company   @relation(fields: [company_id], references: [id])
+
+  @@map("reminder")
+  @@schema("parameters")
+}
+
+model Intention{
+  id              Int     @id @default(autoincrement())
+  code            String
+  flow_name       String
+  description     String
+  ai_instructions String
+  agentIntention  AgentIntention[]
+  
+  @@map("intention")
+  @@schema("parameters")
+}
+
+model AIRequirement{
+  id              Int     @id @default(autoincrement())
+  instructions    Json   
+  agentIntention  AgentIntention[]  
+
+  @@map("ai_requirement")
+  @@schema("parameters")
+}
+
+model AgentIntention {
+  id                  Int              @id @default(autoincrement())
+  require_catalog     Boolean
+  require_schedule    Boolean
+  require_sheet       Boolean          @default(false)
+  require_db          Boolean          @default(true)
+  require_reminder    Boolean          @default(false)
+  agent_id            Int  
+  intention_id        Int
+  ai_requirement_id   Int?
+  agent               Agent           @relation(fields: [agent_id], references: [id])
+  intention           Intention       @relation(fields: [intention_id], references: [id])
+  ai_requirement      AIRequirement?  @relation(fields: [ai_requirement_id], references: [id])
+
+  @@map("agent_intention")
+  @@schema("parameters")
+}
+
+model Form {
+  id            Int     @id @default(autoincrement())
+  company_id    Int
+  title         String
+  table_name    String
+  description   String?
+  fields        Fields[]
+  code          String  @unique
+  company       Company @relation(fields: [company_id], references: [id])
+
+  @@map("form")
+  @@schema("parameters")
+}
+
+model Fields{
+  id            Int     @id @default(autoincrement())
+  type          type_field
+  key           String
+  label         String
+  placeholder   String
+  form_id       Int
+  options       String[]
+  required      Boolean @default(false)
+  form          Form    @relation(fields: [form_id], references: [id])
+
+  @@map("fields")
+  @@schema("parameters")
+}
+
+enum type_field{
+  string
+  number
+  date
+  email
+  select
+  boolean
+  location
+
+  @@schema("parameters")
+}
+
+enum days{
+  lunes
+  martes
+  miercoles
+  jueves
+  viernes
+  sabado
+  domingo
+
+  @@schema("parameters")
+}
+
+enum periodicity{
+  once
+  daily
+  weekly
+  monthly
+  yearly  
+  
+  @@schema("parameters")
+}
+
+enum channel{
+  whatsapp
+  instagram
+  telegram
+  facebook
+  email
+
+  @@schema("parameters")
+}

@@ -1,0 +1,50 @@
+// Pendiente agregar moneda, pais, departamento a la ciudad
+model Company {
+  id          Int     @id @default(autoincrement())
+  isotype     String?
+  name        String
+  nit         String  @unique
+  address     String
+  city        String
+  industry    String
+  user        User[]
+  form        Form[]
+  agent       Agent[]
+  client      Client[]
+  agenda      Agenda[]
+  catalog     Catalog[]
+  reminder    Reminder[]
+  provider    Provider[]
+  activity_description String
+  company_schedule CompanySchedule[]
+  lead_relationships CompanyLeads[] // tabla de rompimiento
+  @@map("company")
+  @@schema("rbac")
+}
+
+model CompanySchedule{
+  id          Int     @id @default(autoincrement())
+  company_id  Int
+  day         days
+  time_range  String
+  company     Company @relation(fields: [company_id], references: [id])
+
+  @@map("company_schedule")
+  @@schema("parameters")
+}
+
+// Tabla de rompimiento para la relación Lead-Company
+// Un lead puede ser de interés para varias compañías en la plataforma
+model CompanyLeads {
+  id         Int     @id @default(autoincrement())
+  companyId  Int
+  leadId     Int
+
+  // Relaciones
+  company    Company @relation(fields: [companyId], references: [id])
+  lead       Lead    @relation(fields: [leadId], references: [id])
+
+  @@unique([companyId, leadId]) // Combinación única
+  @@map("company_leads")
+  @@schema("business")
+}

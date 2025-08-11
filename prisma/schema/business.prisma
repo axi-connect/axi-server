@@ -1,0 +1,119 @@
+model Catalog {
+  id          Int     @id @default(autoincrement())
+  name        String
+  code        String  @unique
+  description String
+  company_id  Int
+  products    Product[]
+  company     Company @relation(fields: [company_id], references: [id])
+
+  @@map("catalog")
+  @@schema("business")
+}
+
+model Product {
+  id          Int     @id @default(autoincrement())
+  price       Int
+  name        String
+  description String
+  image       String?
+  catalog_id  Int
+  agenda      Agenda[]
+  catalog     Catalog @relation(fields: [catalog_id], references: [id])
+  @@map("product")
+  @@schema("business")
+}
+
+model Agenda{
+  id          Int       @id @default(autoincrement())
+  client_id   Int
+  company_id  Int
+  date        DateTime
+  hour        String
+  product_id  Int
+  company     Company   @relation(fields: [company_id], references: [id])
+  client      Client    @relation(fields: [client_id], references: [id])
+  product     Product   @relation(fields: [product_id], references: [id])
+
+  @@map("agenda")
+  @@schema("business")
+}
+
+model Client{
+  id            Int     @id @default(autoincrement())
+  names         String
+  surnames      String
+  document_num  Int?     @unique
+  document_type DocumentType?
+  birthdate     DateTime?
+  email         String?  @unique
+  phone         String?  @unique
+  address       String?
+  city          String?  
+  company_id    Int
+  agenda        Agenda[]
+  reminder      Reminder[]
+  company       Company @relation(fields: [company_id], references: [id])
+
+  @@map("client")
+  @@schema("business")
+}
+
+model Provider{
+  id            Int     @id @default(autoincrement())
+  name          String
+  phone         String
+  company_id    Int
+  company       Company @relation(fields: [company_id], references: [id])
+
+  @@map("provider")
+  @@schema("business")
+}
+
+// Modelo de Lead B2B enriquecido con datos de Google Maps y lógica de negocio
+model Lead {
+  id               Int            @id @default(autoincrement())
+  name             String?        // Nombre de la empresa o persona
+  phone            String         @unique
+  email            String?        @unique
+  website          String?
+  source           String         // Ej: 'Google Maps', 'Manual', 'Formulario Web'
+  address          String?
+  city             String?
+  industry         String?
+  lead_score       Int            @default(0)
+  status           LeadStatus     @default(Cold) // Enum para el estado del lead
+  pipeline_stage   String         @default("Initial Contact") // Etapa del embudo
+  opening_hours    Json?          // Horarios de atención como JSON
+  reviews          Json?          // Reseñas como JSON
+  notes            String?        // Notas adicionales del agente
+
+  // Relaciones
+  lead_relationships CompanyLeads[]     // Relación con las empresas
+  reminders          Reminder[]
+
+  @@map("lead")
+  @@schema("business")
+}
+
+enum DocumentType{
+  cc  // Cédula de Ciudadanía
+  ce  // Cédula de Extranjería
+  ti  // Tarjeta de Identidad
+  pp  // Pasaporte
+  nit // Número de Identificación Tributaria
+  
+  @@schema("business")
+}
+
+// Estado del lead
+enum LeadStatus {
+  Hot
+  Warm
+  Cold
+  New
+  Contacted
+  Converted
+
+  @@schema("business")
+}

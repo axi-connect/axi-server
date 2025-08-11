@@ -1,0 +1,51 @@
+model Agent{
+  id              Int     @id @default(autoincrement())
+  name            String
+  phone           String  @unique
+  alive           Boolean @default(true)
+  client_id       String
+  company_id      Int 
+  company         Company @relation(fields: [company_id], references: [id])
+  agentIntention  AgentIntention[]
+  messages        MessageLog[]
+
+  @@map("agent")
+  @@schema("channels")
+}
+
+enum ChannelType {
+  whatsapp
+  email
+  call
+  instagram
+  facebook
+  telegram
+
+  @@schema("channels")
+}
+
+enum MessageDirection {
+  incoming
+  outgoing
+
+  @@schema("channels")
+}
+
+model MessageLog {
+  id            Int               @id @default(autoincrement())
+  entityType    String
+  entityId      Int
+  agentId       Int?
+  channel       ChannelType
+  direction     MessageDirection
+  message       String
+  timestamp     DateTime          @default(now())
+  metadata      Json?
+
+  agent         Agent?            @relation(fields: [agentId], references: [id])
+
+  @@index([entityType, entityId, timestamp], map: "idx_message_entity_timestamp")
+  @@index([timestamp], map: "idx_message_timestamp")
+  @@map("message_log")
+  @@schema("channels")
+}
