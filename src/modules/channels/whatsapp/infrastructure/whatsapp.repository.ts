@@ -4,7 +4,7 @@ import qr from 'qr-image';
 import pkg from 'whatsapp-web.js';
 import { Conversation } from './conversation.repository.js';
 import mainLayer from '../application/layers/main.layer.js';
-import { agentDependency } from '../../../identities/domain/repository.interface.js';
+import { AgentWithRelations as agentDependency } from '../../../agents/domain/repository.interface.js';
 import { ReminderRepository } from '../../../reminder/infrastructure/reminder.repository.js';
 const { Client, LocalAuth} = pkg;
 

@@ -4,7 +4,6 @@ import { CatalogRepository } from "./catalog.repository.js";
 import { CatalogController } from "./catalog.controller.js";
 import { upload } from "../../../middlewares/upload.middleware.js"; 
 import { CatalogUseCases } from "../application/catalog.usescases.js";
-import { IdentitiesRepository } from "../../identities/infrastructure/identities.repository.js";
 
 export const CatalogRouter = Router();
 const catalogRepository = new CatalogRepository();

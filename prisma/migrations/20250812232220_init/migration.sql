@@ -17,6 +17,12 @@ CREATE TYPE "business"."DocumentType" AS ENUM ('cc', 'ce', 'ti', 'pp', 'nit');
 CREATE TYPE "business"."LeadStatus" AS ENUM ('Hot', 'Warm', 'Cold', 'New', 'Contacted', 'Converted');
 
 -- CreateEnum
+CREATE TYPE "channels"."ChannelType" AS ENUM ('whatsapp', 'email', 'call', 'instagram', 'facebook', 'telegram');
+
+-- CreateEnum
+CREATE TYPE "channels"."MessageDirection" AS ENUM ('incoming', 'outgoing');
+
+-- CreateEnum
 CREATE TYPE "parameters"."type_field" AS ENUM ('string', 'number', 'date', 'email', 'select', 'boolean', 'location');
 
 -- CreateEnum
@@ -115,20 +121,6 @@ CREATE TABLE "business"."lead" (
 );
 
 -- CreateTable
-CREATE TABLE "business"."communication_log" (
-    "id" SERIAL NOT NULL,
-    "lead_id" INTEGER NOT NULL,
-    "agent_id" INTEGER,
-    "channel" "parameters"."channel" NOT NULL,
-    "message" TEXT NOT NULL,
-    "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "is_sent" BOOLEAN NOT NULL,
-    "metadata" JSONB,
-
-    CONSTRAINT "communication_log_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "channels"."agent" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
@@ -138,6 +130,21 @@ CREATE TABLE "channels"."agent" (
     "company_id" INTEGER NOT NULL,
 
     CONSTRAINT "agent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "channels"."message_log" (
+    "id" SERIAL NOT NULL,
+    "entityType" TEXT NOT NULL,
+    "entityId" INTEGER NOT NULL,
+    "agentId" INTEGER,
+    "channel" "channels"."ChannelType" NOT NULL,
+    "direction" "channels"."MessageDirection" NOT NULL,
+    "message" TEXT NOT NULL,
+    "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "metadata" JSONB,
+
+    CONSTRAINT "message_log_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -287,7 +294,7 @@ CREATE TABLE "rbac"."role_module" (
     "id" SERIAL NOT NULL,
     "role_id" INTEGER NOT NULL,
     "module_id" INTEGER NOT NULL,
-    "permission" "rbac"."permission_type",
+    "permission" "rbac"."permission_type"[] DEFAULT ARRAY['read', 'create']::"rbac"."permission_type"[],
 
     CONSTRAINT "role_module_pkey" PRIMARY KEY ("id")
 );
@@ -314,6 +321,12 @@ CREATE UNIQUE INDEX "lead_email_key" ON "business"."lead"("email");
 CREATE UNIQUE INDEX "agent_phone_key" ON "channels"."agent"("phone");
 
 -- CreateIndex
+CREATE INDEX "idx_message_entity_timestamp" ON "channels"."message_log"("entityType", "entityId", "timestamp");
+
+-- CreateIndex
+CREATE INDEX "idx_message_timestamp" ON "channels"."message_log"("timestamp");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "company_nit_key" ON "rbac"."company"("nit");
 
 -- CreateIndex
@@ -333,6 +346,12 @@ CREATE UNIQUE INDEX "module_code_key" ON "rbac"."module"("code");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "module_route_key" ON "rbac"."module"("route");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "role_code_key" ON "rbac"."role"("code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "role_module_role_id_module_id_key" ON "rbac"."role_module"("role_id", "module_id");
 
 -- AddForeignKey
 ALTER TABLE "business"."catalog" ADD CONSTRAINT "catalog_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -356,13 +375,10 @@ ALTER TABLE "business"."client" ADD CONSTRAINT "client_company_id_fkey" FOREIGN 
 ALTER TABLE "business"."provider" ADD CONSTRAINT "provider_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "business"."communication_log" ADD CONSTRAINT "communication_log_lead_id_fkey" FOREIGN KEY ("lead_id") REFERENCES "business"."lead"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "business"."communication_log" ADD CONSTRAINT "communication_log_agent_id_fkey" FOREIGN KEY ("agent_id") REFERENCES "channels"."agent"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "channels"."agent" ADD CONSTRAINT "agent_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "channels"."message_log" ADD CONSTRAINT "message_log_agentId_fkey" FOREIGN KEY ("agentId") REFERENCES "channels"."agent"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "parameters"."company_schedule" ADD CONSTRAINT "company_schedule_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

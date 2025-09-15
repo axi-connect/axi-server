@@ -6,7 +6,7 @@ import { conversation, sendMessageClient } from "../../domain/conversation.inter
 import { CatalogRepository } from '../../../../catalog/infrastructure/catalog.repository.js';
 import { ParametersUsesCases } from '../../../../parameters/application/parameters.usescases.js';
 import { ParametersRepository } from '../../../../parameters/infrastructure/parameters.repository.js';
-import { agentDependency, agentIntentionDependency } from "../../../../identities/domain/repository.interface.js";
+import { AgentWithRelations as agentDependency, AgentIntentionDependency as agentIntentionDependency } from "../../../../agents/domain/repository.interface.js";
 import { Company } from '@prisma/client';
 
 const getArgumentFlow = async(

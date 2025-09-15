@@ -1,12 +1,12 @@
-import { identitiesRepositoryInterface } from "../../../identities/domain/repository.interface.js";
+import { AgentsRepositoryInterface } from "../../../agents/domain/repository.interface.js";
 import { WhatsappRepository } from "../infrastructure/whatsapp.repository.js";
 
 export class WhatsappUseCases{
-    constructor(private identitiesRepository:identitiesRepositoryInterface){}
+    constructor(private agentsRepository:AgentsRepositoryInterface){}
     private whatsappRepository:WhatsappRepository|null = null;
 
     async createClient(client_id:string):Promise<string>{
-        const [agent] = await this.identitiesRepository.getAgent(client_id, 'client_id');
+        const [agent] = await this.agentsRepository.getAgent(client_id, 'client_id');
         if(!agent) throw new Error("El agente no existe");
 
         if(!agent.alive) throw new Error("El agente no esta disponible");

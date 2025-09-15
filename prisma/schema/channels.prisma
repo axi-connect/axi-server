@@ -5,7 +5,9 @@ model Agent{
   alive           Boolean @default(true)
   client_id       String
   company_id      Int 
-  company         Company @relation(fields: [company_id], references: [id])
+  company         Company @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  status          AgentStatus
+  skills          String[]
   agentIntention  AgentIntention[]
   messages        MessageLog[]
 
@@ -41,11 +43,24 @@ model MessageLog {
   message       String
   timestamp     DateTime          @default(now())
   metadata      Json?
+  conversation_id Int
 
   agent         Agent?            @relation(fields: [agentId], references: [id])
 
   @@index([entityType, entityId, timestamp], map: "idx_message_entity_timestamp")
   @@index([timestamp], map: "idx_message_timestamp")
   @@map("message_log")
+  @@schema("channels")
+}
+
+enum AgentStatus {
+  available
+  busy
+  away
+  offline
+  training
+  meeting
+  on_break
+
   @@schema("channels")
 }

@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { WhatsappUseCases } from "../application/whatsapp.usescases.js";
+import { ResponseDto } from "../../../../shared/dto/response.dto.js";
 
 export class WhatsappController{
     constructor(private whatsappUsesCases:WhatsappUseCases){}
@@ -9,18 +10,11 @@ export class WhatsappController{
             if(req.query.client_id == undefined) throw new Error("No hay ID de cliente");
             const client_id:string = req.query.client_id.toString();
             const route_session = await this.whatsappUsesCases.createClient(client_id);
-            
-            res.status(200).json({
-                successful: true,
-                message: "Inicia sesion en la siguiente ruta",
-                data: route_session
-            });
+            const response = new ResponseDto(true, "Inicia sesión en la siguiente ruta", route_session, 200);
+            res.status(200).json(response);
         } catch (error:any) {
-            res.status(500).json({
-                successful: false,
-                message: error?.message,
-                error
-            })
+            const response = new ResponseDto(false, error?.message || 'Error al crear cliente de WhatsApp', null, 500);
+            res.status(500).json(response);
         }
     }
 }

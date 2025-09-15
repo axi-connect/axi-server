@@ -1,4 +1,5 @@
 import cors from "cors";
+import path from 'path';
 import "./database/redis.js";
 import dotenv from "dotenv";
 import helmet from "helmet";
@@ -23,6 +24,9 @@ app.use(morgan("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 dotenv.config();
+
+// Static public (e.g., QR images)
+app.use('/public', express.static(path.resolve('src/public')));
 
 // Routes
 app.use('/auth', AuthRouter);

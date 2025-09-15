@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { RbacUsesCases } from "../application/rbac.usecases.js";
+import { ResponseDto } from "../../../shared/dto/response.dto.js";
 
 export class RbacController{
     constructor(private rbacUsesCases: RbacUsesCases){}
@@ -7,51 +8,33 @@ export class RbacController{
     createRole = async (req: Request, res: Response):Promise<void> =>{
         try {
             const role = await this.rbacUsesCases.createRol(req.body);
-            res.status(200).json({
-                successful: true,
-                message: "Rol creado correctamente",
-                data: role
-            })
+            const response = new ResponseDto(true, 'Rol creado correctamente', role, 200);
+            res.status(200).json(response);
         } catch (error:any) {
-            res.status(500).json({
-                successful: false,
-                message: error?.message,
-                error: error
-            })
+            const response = new ResponseDto(false, error?.message ?? 'Error', null, 500);
+            res.status(500).json(response);
         }
     }
 
     readRole = async (req: Request, res:Response):Promise<void> => {
         try {
             const roles = await this.rbacUsesCases.readRole();
-            res.status(200).json({
-                successful: true,
-                message: "Lista de roles generada correctamente",
-                data: roles
-            });
+            const response = new ResponseDto(true, 'Lista de roles generada correctamente', roles as any, 200);
+            res.status(200).json(response);
         } catch (error:any) {
-            res.status(500).json({
-                successful: false,
-                message: error?.message,
-                error: error
-            })
+            const response = new ResponseDto(false, error?.message ?? 'Error', null, 500);
+            res.status(500).json(response);
         }
     }
 
     createModule = async (req: Request, res: Response):Promise<void> =>{
         try {
             const module = await this.rbacUsesCases.createModule(req.body);
-            res.status(200).json({
-                successful: true,
-                message: "Módulo creado correctamente",
-                data: module
-            });
+            const response = new ResponseDto(true, 'Módulo creado correctamente', module, 200);
+            res.status(200).json(response);
         } catch (error:any) {
-            res.status(500).json({
-                successful: false,
-                message: error?.message,
-                error: error
-            })
+            const response = new ResponseDto(false, error?.message ?? 'Error', null, 500);
+            res.status(500).json(response);
         }
     }
 }

@@ -1,10 +1,8 @@
 import { Message } from "whatsapp-web.js"
-
 export interface message{
     role: 'customer'|'agent',
     content: string
 }
-
 export interface contact{
     id:string,
     name:string,

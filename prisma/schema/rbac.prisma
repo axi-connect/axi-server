@@ -28,7 +28,7 @@ model Module {
 model Role {
   id          Int          @id @default(autoincrement())
   name        String
-  code        String
+  code        String       @unique
   role_module RoleModule[]
   users       User[]
 
@@ -37,15 +37,16 @@ model Role {
 }
 
 model RoleModule {
-  id         Int              @id @default(autoincrement())
+  id         Int                @id @default(autoincrement())
   role_id    Int
   module_id  Int
-  permission permission_type?
-  module     Module           @relation(fields: [module_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  role       Role             @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  permission permission_type[]  @default([read, create])
+  module     Module             @relation(fields: [module_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  role       Role               @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("role_module")
   @@schema("rbac")
+  @@unique([role_id, module_id])
 }
 
 enum permission_type {

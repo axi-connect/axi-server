@@ -1,6 +1,6 @@
 import { Message } from "whatsapp-web.js";
 import { AiService } from "../../../../../services/ai/index.js";
-import { identitiesRepositoryInterface } from "../../../../identities/domain/repository.interface.js";
+import { ClientsRepositoryInterface } from "../../../../clients/domain/repository.interface.js";
 import { ParametersRepository } from "../../../../parameters/infrastructure/parameters.repository.js";
 import { conversation, sendMessageClient } from "../../domain/conversation.interface.js";
 import { Conversation } from "../../infrastructure/conversation.repository.js";
@@ -147,7 +147,7 @@ export default async ({
     flow_code:string, 
     conversation:conversation, 
     sendMessage:sendMessageClient, 
-    identitiesRepository: identitiesRepositoryInterface,
+    identitiesRepository: ClientsRepositoryInterface,
 }):Promise<{data:null|Client|string, success:boolean}> => {
     client_redis = await Conversation.getClient(conversation.contact.id);
     const contact = await Conversation.getContact(conversation.contact.id);
@@ -218,7 +218,7 @@ export default async ({
                         client_data.birthdate = new Date(client_redis_data.birthdate);
                     }
 
-                    const client_db = await identitiesRepository.createClient(client_data);
+                    const client_db = await identitiesRepository.createClient(client_data as any);
                     Conversation.deleteClient(conversation.contact.id);
                     response.success = true; response.data = client_db;
                 }catch(error){

@@ -7,11 +7,11 @@ export class RbacUsesCases{
 
     async createRol(role_data: any): Promise<Role>{
         const modules_id:number[] = [];
-        const permissions:{module_id:number, permission:permission_type}[] = [];
+        const permissions:{module_id:number, permission:permission_type[]}[] = [];
 
         role_data.permissions.forEach(({module_id, permission}:any) => {
             modules_id.push(module_id);
-            permissions.push(...permission.map((permission_item:permission_type) => ({module_id, permission: permission_item})))
+            permissions.push({ module_id, permission });
         });
 
         const modules = await this.rbacRepository.getModule(modules_id);

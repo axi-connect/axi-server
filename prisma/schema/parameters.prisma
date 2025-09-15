@@ -24,6 +24,8 @@ model Intention{
   description     String
   ai_instructions String
   agentIntention  AgentIntention[]
+  priority        IntentionPriority
+  type            IntentionType
   
   @@map("intention")
   @@schema("parameters")
@@ -48,7 +50,7 @@ model AgentIntention {
   agent_id            Int  
   intention_id        Int
   ai_requirement_id   Int?
-  agent               Agent           @relation(fields: [agent_id], references: [id])
+  agent               Agent           @relation(fields: [agent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   intention           Intention       @relation(fields: [intention_id], references: [id])
   ai_requirement      AIRequirement?  @relation(fields: [ai_requirement_id], references: [id])
 
@@ -64,7 +66,7 @@ model Form {
   description   String?
   fields        Fields[]
   code          String  @unique
-  company       Company @relation(fields: [company_id], references: [id])
+  company       Company @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("form")
   @@schema("parameters")
@@ -125,6 +127,25 @@ enum channel{
   telegram
   facebook
   email
+
+  @@schema("parameters")
+}
+
+enum IntentionPriority {
+  low
+  medium
+  high
+  urgent
+
+  @@schema("parameters")
+}
+
+enum IntentionType {
+  sales
+  support
+  technical
+  onboarding
+  follow_up
 
   @@schema("parameters")
 }

@@ -5,7 +5,7 @@ model Catalog {
   description String
   company_id  Int
   products    Product[]
-  company     Company @relation(fields: [company_id], references: [id])
+  company     Company @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("catalog")
   @@schema("business")
@@ -19,7 +19,7 @@ model Product {
   image       String?
   catalog_id  Int
   agenda      Agenda[]
-  catalog     Catalog @relation(fields: [catalog_id], references: [id])
+  catalog     Catalog @relation(fields: [catalog_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   @@map("product")
   @@schema("business")
 }
@@ -31,7 +31,7 @@ model Agenda{
   date        DateTime
   hour        String
   product_id  Int
-  company     Company   @relation(fields: [company_id], references: [id])
+  company     Company   @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   client      Client    @relation(fields: [client_id], references: [id])
   product     Product   @relation(fields: [product_id], references: [id])
 
@@ -53,7 +53,7 @@ model Client{
   company_id    Int
   agenda        Agenda[]
   reminder      Reminder[]
-  company       Company @relation(fields: [company_id], references: [id])
+  company       Company @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("client")
   @@schema("business")
@@ -64,7 +64,7 @@ model Provider{
   name          String
   phone         String
   company_id    Int
-  company       Company @relation(fields: [company_id], references: [id])
+  company       Company @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("provider")
   @@schema("business")

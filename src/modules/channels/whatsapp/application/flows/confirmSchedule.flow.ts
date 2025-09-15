@@ -4,7 +4,7 @@ import { redisDB } from '../../../../../database/redis.js';
 import { paramsFlow } from "../../domain/flow.interface.js";
 import { AiService } from "../../../../../services/ai/index.js";
 import { Conversation } from "../../infrastructure/conversation.repository.js";
-import { IdentitiesRepository } from "../../../../identities/infrastructure/identities.repository.js";
+import { ClientsRepository } from "../../../../clients/infrastructure/clients.repository.js";
 import { ReminderRepository } from "../../../../reminder/infrastructure/reminder.repository.js";
 import { GoogleSheetsRepository } from "../../../../../services/google/sheets.repository.js";
 
@@ -18,12 +18,12 @@ export default async ({history,conversation, sendMessage, storage, require_remin
             schedule_hystory = history
         }
 
-        const identitiesRepository = new IdentitiesRepository();
-        let [client]:Client[]|null[] = await identitiesRepository.getClient(conversation.contact.number, 'phone');
+        const clientsRepository = new ClientsRepository();
+        let [client]:Client[]|null[] = await clientsRepository.getClient(conversation.contact.number, 'phone');
 
         if(!client){
             // Create Client
-            const new_client = await clientLayer({conversation, sendMessage, flow_code: 'confirm-schedule', identitiesRepository});
+            const new_client = await clientLayer({conversation, sendMessage, flow_code: 'confirm-schedule', identitiesRepository: clientsRepository as any});
             if(!new_client.success){
                 sendMessage(conversation.contact.id, new_client.data as string)
                 return;

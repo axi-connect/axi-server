@@ -21,6 +21,7 @@ export interface GooglePhotoResult {
   public_id: string;
   contentType: string;
 }
+
 export class LeadsUseCases {
   private googleMapsRepository: GoogleMapsRepository;
   private cloudinaryRepository: CloudinaryRepository;

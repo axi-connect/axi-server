@@ -3,7 +3,7 @@ import { Module, permission_type, Role } from "@prisma/client";
 export interface createRoleInterface{
     code: string,
     name: string,
-    permissions: {module_id:number, permission:permission_type}[],
+    permissions: {module_id:number, permission:permission_type[]}[],
 }
 
 export interface rbacRepositoryInterface {
