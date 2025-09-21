@@ -41,7 +41,7 @@ export class RbacController{
 
     readModule = async (req: Request, res: Response):Promise<void> =>{
         try {
-            const criteria = (res.locals as any).moduleSearch;
+            const criteria = res.locals.moduleSearch;
             const result = await this.rbacUsesCases.searchModules(criteria as any);
             const response = new ResponseDto(true, 'Lista de módulos generada correctamente', result as any, 200);
             res.status(200).json(response);
@@ -53,8 +53,8 @@ export class RbacController{
 
     overview = async (req: Request, res: Response):Promise<void> =>{
         try{
-            const criteria = (res.locals as any).overviewSearch;
-            const overview = await this.rbacUsesCases.getOverview(criteria as any);
+            const criteria = res.locals.overviewSearch;
+            const overview = await this.rbacUsesCases.getOverview(criteria);
             const response = new ResponseDto(true, 'Visión general generada correctamente', overview as any, 200);
             res.status(200).json(response);
         }catch(error:any){

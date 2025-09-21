@@ -152,7 +152,7 @@ export class RbacValidator{
             const response = new ResponseDto(false, message, null, 400);
             res.status(400).json(response);
         } else {
-            (res.locals as any).moduleSearch = value;
+            res.locals.moduleSearch = value;
             next();
         }
     }
@@ -222,6 +222,9 @@ export class RbacValidator{
             const message = error.details.map(d => d.message).join(', ');
             const response = new ResponseDto(false, message, null, 400);
             res.status(400).json(response);
-        } else next();
+        } else {
+            res.locals.overviewSearch = value;
+            next();
+        }
     }
 }

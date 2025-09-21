@@ -3,7 +3,7 @@ import { RoleRepository } from "./repository/role.repository.js";
 import { AuditRepository } from "./repository/audit.repository.js";
 import { ModuleRepository } from "./repository/module.repository.js";
 import { OverviewRepository } from "./repository/overview.repository.js";
-import { createRoleInterface, rbacRepositoryInterface, ModuleDetailDTO, ModuleSearchInterface, ModuleSummaryDTO, RoleDetailDTO, RoleSearchInterface, RoleSummaryDTO, UpdateRoleInput } from "../../rbac/domain/repository.interface.js"; 
+import { createRoleInterface, rbacRepositoryInterface, ModuleDetailDTO, ModuleSearchInterface, ModuleSummaryDTO, RoleDetailDTO, RoleSearchInterface, RoleSummaryDTO, UpdateRoleInput, OverviewSearchInterface } from "../../rbac/domain/repository.interface.js"; 
 
 export class RbacRepository implements rbacRepositoryInterface {
     private db: PrismaClient;
@@ -76,7 +76,7 @@ export class RbacRepository implements rbacRepositoryInterface {
     }
 
     // Overview
-    async getOverview(search: any): Promise<any>{
+    async getOverview(search: OverviewSearchInterface): Promise<any>{
         return this.overviewRepo.getOverview(search);
     }
 

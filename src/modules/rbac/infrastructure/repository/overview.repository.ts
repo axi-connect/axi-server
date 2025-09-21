@@ -1,10 +1,11 @@
 import { PrismaClient } from "@prisma/client";
+import { OverviewSearchInterface } from "../../domain/repository.interface.js";
 
 export class OverviewRepository {
     constructor(private db: PrismaClient) {}
 
-    async getOverview(search: any): Promise<any>{
-        const view = search?.view === 'detail' ? 'detail' : 'summary';
+    async getOverview(search: OverviewSearchInterface): Promise<any>{
+        const view = search.view === 'detail' ? 'detail' : 'summary';
 
         const [rolesCount, modulesCount, usersCount] = await this.db.$transaction([
             this.db.role.count(),
