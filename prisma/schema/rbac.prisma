@@ -9,28 +9,38 @@ model User {
   company_id Int
   company    Company @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   role       Role    @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  session    Session[]
+  audit_log  AuditLog[]
 
   @@map("user")
   @@schema("rbac")
 }
 
 model Module {
-  id          Int          @id @default(autoincrement())
-  name        String
-  code        String       @unique
-  route       String       @unique
-  role_module RoleModule[]
+  id            Int             @id @default(autoincrement())
+  name          String
+  icon          String?
+  code          String          @unique
+  path          String          @unique
+  is_public     Boolean         @default(false)
+  role_module   RoleModule[]
+  parent_id     Int?
+  parent        Module?         @relation("ModuleChildren", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children      Module[]        @relation("ModuleChildren")
 
   @@map("module")
   @@schema("rbac")
 }
 
 model Role {
-  id          Int          @id @default(autoincrement())
-  name        String
-  code        String       @unique
-  role_module RoleModule[]
-  users       User[]
+  id              Int          @id @default(autoincrement())
+  name            String
+  code            String       @unique
+  description     String?
+  hierarchy_level Int          @default(0)
+  state           role_state   @default(active)
+  role_module     RoleModule[]
+  users           User[]
 
   @@map("role")
   @@schema("rbac")
@@ -42,11 +52,33 @@ model RoleModule {
   module_id  Int
   permission permission_type[]  @default([read, create])
   module     Module             @relation(fields: [module_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  role       Role               @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  role       Role               @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("role_module")
   @@schema("rbac")
   @@unique([role_id, module_id])
+}
+
+model Session {
+  id        Int     @id @default(autoincrement())
+  user_id   Int
+  user      User     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  token     String
+  expires_at DateTime
+
+  @@map("session")
+  @@schema("rbac")
+}
+
+model AuditLog {
+  id        Int     @id @default(autoincrement())
+  user_id   Int
+  user      User     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  action    String
+  timestamp DateTime @default(now())
+
+  @@map("audit_log")
+  @@schema("rbac")
 }
 
 enum permission_type {
@@ -54,6 +86,13 @@ enum permission_type {
   create
   update
   delete
+
+  @@schema("rbac")
+}
+
+enum role_state {
+  active
+  inactive
 
   @@schema("rbac")
 }

@@ -23,6 +23,9 @@ CREATE TYPE "channels"."ChannelType" AS ENUM ('whatsapp', 'email', 'call', 'inst
 CREATE TYPE "channels"."MessageDirection" AS ENUM ('incoming', 'outgoing');
 
 -- CreateEnum
+CREATE TYPE "channels"."AgentStatus" AS ENUM ('available', 'busy', 'away', 'offline', 'training', 'meeting', 'on_break');
+
+-- CreateEnum
 CREATE TYPE "parameters"."type_field" AS ENUM ('string', 'number', 'date', 'email', 'select', 'boolean', 'location');
 
 -- CreateEnum
@@ -33,6 +36,12 @@ CREATE TYPE "parameters"."periodicity" AS ENUM ('once', 'daily', 'weekly', 'mont
 
 -- CreateEnum
 CREATE TYPE "parameters"."channel" AS ENUM ('whatsapp', 'instagram', 'telegram', 'facebook', 'email');
+
+-- CreateEnum
+CREATE TYPE "parameters"."IntentionPriority" AS ENUM ('low', 'medium', 'high', 'urgent');
+
+-- CreateEnum
+CREATE TYPE "parameters"."IntentionType" AS ENUM ('sales', 'support', 'technical', 'onboarding', 'follow_up');
 
 -- CreateEnum
 CREATE TYPE "rbac"."permission_type" AS ENUM ('read', 'create', 'update', 'delete');
@@ -128,6 +137,8 @@ CREATE TABLE "channels"."agent" (
     "alive" BOOLEAN NOT NULL DEFAULT true,
     "client_id" TEXT NOT NULL,
     "company_id" INTEGER NOT NULL,
+    "status" "channels"."AgentStatus" NOT NULL,
+    "skills" TEXT[],
 
     CONSTRAINT "agent_pkey" PRIMARY KEY ("id")
 );
@@ -143,6 +154,7 @@ CREATE TABLE "channels"."message_log" (
     "message" TEXT NOT NULL,
     "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "metadata" JSONB,
+    "conversation_id" INTEGER NOT NULL,
 
     CONSTRAINT "message_log_pkey" PRIMARY KEY ("id")
 );
@@ -203,6 +215,8 @@ CREATE TABLE "parameters"."intention" (
     "flow_name" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "ai_instructions" TEXT NOT NULL,
+    "priority" "parameters"."IntentionPriority" NOT NULL,
+    "type" "parameters"."IntentionType" NOT NULL,
 
     CONSTRAINT "intention_pkey" PRIMARY KEY ("id")
 );
@@ -274,8 +288,11 @@ CREATE TABLE "rbac"."user" (
 CREATE TABLE "rbac"."module" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
+    "icon" TEXT,
     "code" TEXT NOT NULL,
-    "route" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "is_public" BOOLEAN NOT NULL DEFAULT false,
+    "parent_id" INTEGER,
 
     CONSTRAINT "module_pkey" PRIMARY KEY ("id")
 );
@@ -285,6 +302,8 @@ CREATE TABLE "rbac"."role" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
     "code" TEXT NOT NULL,
+    "description" TEXT,
+    "hierarchy_level" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "role_pkey" PRIMARY KEY ("id")
 );
@@ -297,6 +316,26 @@ CREATE TABLE "rbac"."role_module" (
     "permission" "rbac"."permission_type"[] DEFAULT ARRAY['read', 'create']::"rbac"."permission_type"[],
 
     CONSTRAINT "role_module_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "rbac"."session" (
+    "id" SERIAL NOT NULL,
+    "user_id" INTEGER NOT NULL,
+    "token" TEXT NOT NULL,
+    "expires_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "session_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "rbac"."audit_log" (
+    "id" SERIAL NOT NULL,
+    "user_id" INTEGER NOT NULL,
+    "action" TEXT NOT NULL,
+    "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "audit_log_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -345,7 +384,7 @@ CREATE UNIQUE INDEX "user_email_key" ON "rbac"."user"("email");
 CREATE UNIQUE INDEX "module_code_key" ON "rbac"."module"("code");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "module_route_key" ON "rbac"."module"("route");
+CREATE UNIQUE INDEX "module_path_key" ON "rbac"."module"("path");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "role_code_key" ON "rbac"."role"("code");
@@ -354,13 +393,13 @@ CREATE UNIQUE INDEX "role_code_key" ON "rbac"."role"("code");
 CREATE UNIQUE INDEX "role_module_role_id_module_id_key" ON "rbac"."role_module"("role_id", "module_id");
 
 -- AddForeignKey
-ALTER TABLE "business"."catalog" ADD CONSTRAINT "catalog_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "business"."catalog" ADD CONSTRAINT "catalog_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE "business"."product" ADD CONSTRAINT "product_catalog_id_fkey" FOREIGN KEY ("catalog_id") REFERENCES "business"."catalog"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "business"."product" ADD CONSTRAINT "product_catalog_id_fkey" FOREIGN KEY ("catalog_id") REFERENCES "business"."catalog"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE "business"."agenda" ADD CONSTRAINT "agenda_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "business"."agenda" ADD CONSTRAINT "agenda_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "business"."agenda" ADD CONSTRAINT "agenda_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "business"."client"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -369,19 +408,19 @@ ALTER TABLE "business"."agenda" ADD CONSTRAINT "agenda_client_id_fkey" FOREIGN K
 ALTER TABLE "business"."agenda" ADD CONSTRAINT "agenda_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "business"."product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "business"."client" ADD CONSTRAINT "client_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "business"."client" ADD CONSTRAINT "client_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE "business"."provider" ADD CONSTRAINT "provider_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "business"."provider" ADD CONSTRAINT "provider_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE "channels"."agent" ADD CONSTRAINT "agent_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "channels"."agent" ADD CONSTRAINT "agent_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "channels"."message_log" ADD CONSTRAINT "message_log_agentId_fkey" FOREIGN KEY ("agentId") REFERENCES "channels"."agent"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "parameters"."company_schedule" ADD CONSTRAINT "company_schedule_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "parameters"."company_schedule" ADD CONSTRAINT "company_schedule_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "business"."company_leads" ADD CONSTRAINT "company_leads_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "rbac"."company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -399,7 +438,7 @@ ALTER TABLE "parameters"."reminder" ADD CONSTRAINT "reminder_client_id_fkey" FOR
 ALTER TABLE "parameters"."reminder" ADD CONSTRAINT "reminder_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "parameters"."agent_intention" ADD CONSTRAINT "agent_intention_agent_id_fkey" FOREIGN KEY ("agent_id") REFERENCES "channels"."agent"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "parameters"."agent_intention" ADD CONSTRAINT "agent_intention_agent_id_fkey" FOREIGN KEY ("agent_id") REFERENCES "channels"."agent"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "parameters"."agent_intention" ADD CONSTRAINT "agent_intention_intention_id_fkey" FOREIGN KEY ("intention_id") REFERENCES "parameters"."intention"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -408,7 +447,7 @@ ALTER TABLE "parameters"."agent_intention" ADD CONSTRAINT "agent_intention_inten
 ALTER TABLE "parameters"."agent_intention" ADD CONSTRAINT "agent_intention_ai_requirement_id_fkey" FOREIGN KEY ("ai_requirement_id") REFERENCES "parameters"."ai_requirement"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "parameters"."form" ADD CONSTRAINT "form_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "parameters"."form" ADD CONSTRAINT "form_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "parameters"."fields" ADD CONSTRAINT "fields_form_id_fkey" FOREIGN KEY ("form_id") REFERENCES "parameters"."form"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -420,7 +459,16 @@ ALTER TABLE "rbac"."user" ADD CONSTRAINT "user_company_id_fkey" FOREIGN KEY ("co
 ALTER TABLE "rbac"."user" ADD CONSTRAINT "user_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "rbac"."role"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
+ALTER TABLE "rbac"."module" ADD CONSTRAINT "module_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "rbac"."module"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+
+-- AddForeignKey
 ALTER TABLE "rbac"."role_module" ADD CONSTRAINT "role_module_module_id_fkey" FOREIGN KEY ("module_id") REFERENCES "rbac"."module"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "rbac"."role_module" ADD CONSTRAINT "role_module_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "rbac"."role"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+
+-- AddForeignKey
+ALTER TABLE "rbac"."session" ADD CONSTRAINT "session_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "rbac"."user"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
+
+-- AddForeignKey
+ALTER TABLE "rbac"."audit_log" ADD CONSTRAINT "audit_log_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "rbac"."user"("id") ON DELETE NO ACTION ON UPDATE NO ACTION;
