@@ -8,7 +8,8 @@ const userCreateSchema = Joi.object({
     email: Joi.string().email().required().label('correo electrónico'),
     password: Joi.string().min(6).required().label('contraseña'),
     company_id: Joi.number().required().label('empresa'),
-    avatar: Joi.string().label('avatar'),
+    // El avatar no debe venir en el body; se recibe como archivo (req.file)
+    avatar: Joi.forbidden().messages({ 'any.unknown': 'El avatar debe enviarse como archivo (multipart/form-data)' }),
     role_id: Joi.number().required().label('rol'),
 }).messages({
     'any.required': 'El campo {#label} es obligatorio',
@@ -22,9 +23,9 @@ const userUpdateSchema = Joi.object({
     name: Joi.string().label('nombre'),
     phone: Joi.string().label('teléfono'),
     email: Joi.string().email().label('correo electrónico'),
-    password: Joi.string().min(6).label('contraseña'),
     company_id: Joi.number().label('empresa'),
-    avatar: Joi.string().label('avatar'),
+    // Igual que en create, el avatar no debe venir como string en el body
+    avatar: Joi.forbidden().messages({ 'any.unknown': 'El avatar debe enviarse como archivo (multipart/form-data)' }),
     role_id: Joi.number().label('rol'),
 }).messages({
     'string.base': 'El campo {#label} debe ser un texto',
@@ -44,7 +45,18 @@ export class UsersValidator{
             const message = error.details.map(d => d.message).join(', ');
             const response = new ResponseDto(false, message, null, 400);
             res.status(400).json(response);
-        } else next();
+            return;
+        }
+        // Validar que el avatar, si se envía, sea un archivo de imagen
+        if (req.file) {
+            const isImage = typeof req.file.mimetype === 'string' && req.file.mimetype.startsWith('image/');
+            if (!isImage){
+                const response = new ResponseDto(false, 'El avatar debe ser un archivo de imagen válido', null, 400);
+                res.status(400).json(response);
+                return;
+            }
+        }
+        next();
     }
 
     /**
@@ -57,10 +69,19 @@ export class UsersValidator{
             const message = error.details.map(d => d.message).join(', ');
             const response = new ResponseDto(false, message, null, 400);
             res.status(400).json(response);
-        } else next();
+            return;
+        }
+        if (req.file) {
+            const isImage = typeof req.file.mimetype === 'string' && req.file.mimetype.startsWith('image/');
+            if (!isImage){
+                const response = new ResponseDto(false, 'El avatar debe ser un archivo de imagen válido', null, 400);
+                res.status(400).json(response);
+                return;
+            }
+        }
+        next();
     }
 }
-
 export class UsersSearchValidator{
     static validate(req: Request, res: Response, next: NextFunction): void {
         const schema = Joi.object({
@@ -96,4 +117,3 @@ export class UsersSearchValidator{
         next();
     }
 }
-

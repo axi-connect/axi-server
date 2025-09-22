@@ -11,38 +11,45 @@ export class UsersController{
             if(req.params.id){
                 const id = Number(req.params.id);
                 const users = await this.usersUseCases.list(id);
-                const response = new ResponseDto(true, 'Usuario obtenido correctamente', (users[0] ?? null) as any, 200);
+                const user = users[0] ?? null;
+                if(!user){
+                    const response = new ResponseDto(false, 'Usuario no encontrado', null, 404);
+                    res.status(404).json(response);
+                    return;
+                }
+                const response = new ResponseDto(true, 'Usuario obtenido correctamente', user as any, 200);
                 res.status(200).json(response);
                 return;
             }
-            const {name, email, phone, company_id, role_id, limit, offset, view, sortBy, sortDir} = (res.locals.search ?? req.query) as any;
+            const {name, email, phone, company_id, role_id, limit, offset, view = 'summary', sortBy, sortDir} = res.locals.search ?? req.query;
             const result = await this.usersUseCases.search({
-                name, email, phone,
+                name, email, phone, view,
                 company_id: company_id ? Number(company_id) : undefined,
                 role_id: role_id ? Number(role_id) : undefined,
                 limit: limit ? Number(limit) : undefined,
                 offset: offset ? Number(offset) : undefined,
-                view: view === 'detail' ? 'detail' : 'summary',
                 sortBy,
                 sortDir
             });
             const response = new ResponseDto(true, 'Usuarios obtenidos correctamente', result as any, 200);
             res.status(200).json(response);
         }catch(error:any){
-            const response = new ResponseDto(false, error?.message || 'Error al obtener usuarios', null, 500);
-            res.status(500).json(response);
+            const status = error?.statusCode ?? 500;
+            const response = new ResponseDto(false, error?.message || 'Error al obtener usuarios', null, status);
+            res.status(status).json(response);
         }
     }
 
     /** Create user */
     create = async (req: Request, res: Response):Promise<void> =>{
         try{
-            const user = await this.usersUseCases.create(req.body);
+            const user = await this.usersUseCases.create(req.body, req.file);
             const response = new ResponseDto(true, 'Usuario creado correctamente', user as any, 201);
             res.status(201).json(response);
         }catch(error:any){
-            const response = new ResponseDto(false, error?.message || 'Error al crear usuario', null, 500);
-            res.status(500).json(response);
+            const status = error?.statusCode ?? 500;
+            const response = new ResponseDto(false, error?.message || 'Error al crear usuario', null, status);
+            res.status(status).json(response);
         }
     }
 
@@ -50,12 +57,13 @@ export class UsersController{
     update = async (req: Request, res: Response):Promise<void> =>{
         try{
             const id = Number(req.params.id);
-            const user = await this.usersUseCases.update(id, req.body);
+            const user = await this.usersUseCases.update(id, req.body, req.file);
             const response = new ResponseDto(true, 'Usuario actualizado correctamente', user as any, 200);
             res.status(200).json(response);
         }catch(error:any){
-            const response = new ResponseDto(false, error?.message || 'Error al actualizar usuario', null, 500);
-            res.status(500).json(response);
+            const status = error?.statusCode ?? 500;
+            const response = new ResponseDto(false, error?.message || 'Error al actualizar usuario', null, status);
+            res.status(status).json(response);
         }
     }
 
@@ -67,8 +75,9 @@ export class UsersController{
             const response = new ResponseDto(true, 'Usuario eliminado correctamente', user as any, 200);
             res.status(200).json(response);
         }catch(error:any){
-            const response = new ResponseDto(false, error?.message || 'Error al eliminar usuario', null, 500);
-            res.status(500).json(response);
+            const status = error?.statusCode ?? 500;
+            const response = new ResponseDto(false, error?.message || 'Error al eliminar usuario', null, status);
+            res.status(status).json(response);
         }
     }
 }

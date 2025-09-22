@@ -10,11 +10,11 @@ import {
   GoogleMapsSearchInterface,
 } from "../domain/leads.interface.js";
 import { Lead, LeadStatus } from "@prisma/client";
-import { getCache, setCache } from "../../../shared/utils/cache.util.js";
+import { getCache, setCache } from "@/shared/utils/cache.util.js";
 import { LeadsRepositoryInterface } from "../domain/repository.interface.js";
-import { CloudinaryRepository } from "../../../services/cloudinary.repository.js";
-import { GoogleMapsRepository } from "../../../services/google/maps.repository.js";
-import { normalizeInternationalPhone, normalizeTextValue } from "../../../shared/utils/utils.shared.js";
+import { CloudinaryRepository } from "@/services/cloudinary.repository.js";
+import { GoogleMapsRepository } from "@/services/google/maps.repository.js";
+import { normalizeInternationalPhone, normalizeTextValue } from "@/shared/utils/utils.shared.js";
  
 export interface GooglePhotoResult {
   secure_url: string;

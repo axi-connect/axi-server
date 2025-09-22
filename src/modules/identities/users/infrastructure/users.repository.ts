@@ -18,16 +18,39 @@ export class UsersRepository implements UsersRepositoryInterface{
         });
     }
 
-    async createUser(user_data:CreateUserInput):Promise<User>{
-        return await this.db.user.create({ data: user_data });
+    async createUser(user_data:CreateUserInput):Promise<Omit<User, 'password'>>{
+        return await this.db.user.create({
+            data: user_data,
+            select: { id: true, name: true, email: true, phone: true, role_id: true, company_id: true, avatar: true }
+        });
     }
 
-    async updateUser(user_id:number, user_data:UpdateUserInput):Promise<User>{
-        return await this.db.user.update({ where: {id: user_id}, data: user_data });
+    async updateUser(user_id:number, user_data:UpdateUserInput):Promise<Omit<User, 'password'>>{
+        return await this.db.user.update({ 
+            data: user_data,
+            where: {id: user_id}, 
+            select: { id: true, name: true, email: true, phone: true, role_id: true, company_id: true, avatar: true } 
+        });
     }
 
     async deleteUser(user_id:number):Promise<User>{
         return await this.db.user.delete({ where: {id: user_id} });
+    }
+
+    /**
+     * Verifica existencia por email o teléfono. Si excludeId está presente, excluye ese usuario.
+    */
+    async existsByEmailOrPhone(email?:string, phone?:string, excludeId?:number):Promise<boolean>{
+        const orFilters:any[] = [];
+        if (email) orFilters.push({ email: email.toLowerCase() });
+        if (phone) orFilters.push({ phone });
+        if (orFilters.length === 0) return false;
+
+        const andFilters:any[] = [{ OR: orFilters }];
+        if (typeof excludeId === 'number') andFilters.push({ NOT: { id: excludeId } });
+
+        const count = await this.db.user.count({ where: { AND: andFilters } });
+        return count > 0;
     }
 
     async findUsersSummary(search:UserSearchInterface = {}):Promise<{users: UserSummaryDTO[], total:number}>{
@@ -44,14 +67,29 @@ export class UsersRepository implements UsersRepositoryInterface{
         const [users, total] = await this.db.$transaction([
             this.db.user.findMany({
                 where,
-                select: { id:true, name:true, email:true, phone:true, role_id:true, company_id:true },
+                select: { 
+                    id:true, name:true, email:true, phone:true, role_id:true, company_id:true, avatar:true,
+                    company: { select: { name: true } },
+                    role: { select: { name: true } }
+                },
                 skip: search.offset ?? 0,
                 take: search.limit ?? 20,
                 orderBy: { [sortBy]: sortDir }
             }),
             this.db.user.count({ where })
         ]);
-        return {users: users as UserSummaryDTO[], total};
+        const mapped = (users as any[]).map(u => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            phone: u.phone,
+            role_id: u.role_id,
+            company_id: u.company_id,
+            company_name: u.company?.name ?? null,
+            role_name: u.role?.name ?? null,
+            avatar: u.avatar
+        })) as unknown as UserSummaryDTO[];
+        return {users: mapped, total};
     }
 
     async findUsersDetail(search:UserSearchInterface = {}):Promise<{users: UserDetailDTO[], total:number}>{
@@ -88,4 +126,3 @@ export class UsersRepository implements UsersRepositoryInterface{
         return {users: detail, total};
     }
 }
-

@@ -30,3 +30,6 @@ const storage = multer.diskStorage({
 });
 
 export const upload = multer({ storage });
+
+// Memory storage for direct buffer usage (e.g., Cloudinary uploads)
+export const uploadMemory = multer({ storage: multer.memoryStorage() });

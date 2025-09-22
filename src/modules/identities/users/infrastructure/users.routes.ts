@@ -2,6 +2,7 @@ import { Router } from "express";
 import { UsersController } from "./users.controller.js";
 import { UsersRepository } from "./users.repository.js";
 import { validateIdParam } from "@/shared/validators.shared.js";
+import { uploadMemory } from "@/middlewares/upload.middleware.js";
 import { UsersUseCases } from "../application/users.usescases.js";
 import { UsersValidator, UsersSearchValidator } from "./users.validator.js";
 
@@ -13,6 +14,17 @@ const usersController = new UsersController(usersUseCases);
 // /identities/users
 UsersRouter.get('/', UsersSearchValidator.validate, usersController.list);
 UsersRouter.get('/:id', validateIdParam('id'), usersController.list);
-UsersRouter.post('/', UsersValidator.validateCreate, usersController.create);
-UsersRouter.put('/:id', validateIdParam('id'), UsersValidator.validateUpdate, usersController.update);
+UsersRouter.post('/', 
+    (req, _res, next) => { req.folder = 'avatars'; next(); },
+    uploadMemory.single('avatar'),
+    UsersValidator.validateCreate,
+    usersController.create
+);
+UsersRouter.put('/:id', 
+    validateIdParam('id'),
+    (req, _res, next) => { req.folder = 'avatars'; next(); },
+    uploadMemory.single('avatar'),
+    UsersValidator.validateUpdate,
+    usersController.update
+);
 UsersRouter.delete('/:id', validateIdParam('id'), usersController.delete);
