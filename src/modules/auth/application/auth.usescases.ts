@@ -1,9 +1,10 @@
 import { compare } from 'bcrypt';
 import { User } from '@prisma/client';
 import { TokenService } from './token.service.js';
-import { CreateUserInput } from "../../users/domain/repository.interface.js";
-import { UsersRepository } from "../../users/infrastructure/users.repository.js";
-import { UsersUseCases } from "../../users/application/users.usescases.js";
+import { UsersUseCases } from "@/modules/identities/users/application/users.usescases.js";
+import { CreateUserInput } from "@/modules/identities/users/domain/repository.interface.js";
+import { UsersRepository } from "@/modules/identities/users/infrastructure/users.repository.js";
+
 export class AuthUsesCases{
     private usersUseCases:UsersUseCases;
     private usersRepository:UsersRepository;

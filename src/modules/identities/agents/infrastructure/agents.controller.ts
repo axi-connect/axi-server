@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
+import { ResponseDto } from "@/shared/dto/response.dto.js";
 import { AgentsUseCases } from "../application/agents.usescases.js";
-import { ResponseDto } from "../../../shared/dto/response.dto.js";
 
 export class AgentsController{
     constructor(private agentsUseCases:AgentsUseCases){}

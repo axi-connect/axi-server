@@ -1,5 +1,5 @@
-import { AgentsRepositoryInterface } from "../../../agents/domain/repository.interface.js";
 import { WhatsappRepository } from "../infrastructure/whatsapp.repository.js";
+import { AgentsRepositoryInterface } from "@/modules/identities/agents/domain/repository.interface.js";
 
 export class WhatsappUseCases{
     constructor(private agentsRepository:AgentsRepositoryInterface){}

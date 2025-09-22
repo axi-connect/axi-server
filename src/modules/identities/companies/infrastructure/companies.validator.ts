@@ -1,6 +1,6 @@
 import Joi from "joi";
 import { NextFunction, Request, Response } from "express";
-import { ResponseDto } from "../../../shared/dto/response.dto.js";
+import { ResponseDto } from "@/shared/dto/response.dto.js";
 
 const normalizeStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const validDays = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo'];

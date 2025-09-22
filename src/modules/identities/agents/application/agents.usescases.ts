@@ -1,10 +1,10 @@
 import { randomUUID } from 'crypto';
 import { Agent } from "@prisma/client";
-import { HttpError } from "../../../shared/errors/http.error.js";
+import { HttpError } from "@/shared/errors/http.error.js";
 import { AgentsRepository } from "../infrastructure/agents.repository.js";
+import { ParametersRepository } from "@/modules/parameters/infrastructure/parameters.repository.js";
 import { CreateAgentInput, UpdateAgentInput, AgentSearchInterface } from "../domain/repository.interface.js";
-import { CompaniesRepository } from "../../companies/infrastructure/companies.repository.js";
-import { ParametersRepository } from "../../parameters/infrastructure/parameters.repository.js";
+import { CompaniesRepository } from "@/modules/identities/companies/infrastructure/companies.repository.js";
 
 export class AgentsUseCases{
     private companiesRepository: CompaniesRepository;

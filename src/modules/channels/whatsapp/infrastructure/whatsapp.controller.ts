@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
+import { ResponseDto } from "@/shared/dto/response.dto.js";
 import { WhatsappUseCases } from "../application/whatsapp.usescases.js";
-import { ResponseDto } from "../../../../shared/dto/response.dto.js";
 
 export class WhatsappController{
     constructor(private whatsappUsesCases:WhatsappUseCases){}

@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
+import { ResponseDto } from "@/shared/dto/response.dto.js";
 import { CompaniesUseCases } from "../application/companies.usescases.js";
-import { ResponseDto } from "../../../shared/dto/response.dto.js";
 
 export class CompaniesController{
     constructor(private companiesUseCases:CompaniesUseCases){}

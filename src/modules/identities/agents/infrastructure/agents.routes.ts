@@ -2,8 +2,8 @@ import { Router } from "express";
 import { AgentsValidator } from "./agents.validator.js";
 import { AgentsController } from "./agents.controller.js";
 import { AgentsRepository } from "./agents.repository.js";
+import { validateIdParam } from "@/shared/validators.shared.js";
 import { AgentsUseCases } from "../application/agents.usescases.js";
-import { validateIdParam } from "../../../shared/validators.shared.js";
 
 export const AgentsRouter = Router();
 const agentsRepository = new AgentsRepository();

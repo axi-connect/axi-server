@@ -1,6 +1,6 @@
 import Joi from "joi";
 import { NextFunction, Request, Response } from "express";
-import { ResponseDto } from "../../../shared/dto/response.dto.js";
+import { ResponseDto } from "@/shared/dto/response.dto.js";
 
 const userCreateSchema = Joi.object({
     name: Joi.string().required().label('nombre'),

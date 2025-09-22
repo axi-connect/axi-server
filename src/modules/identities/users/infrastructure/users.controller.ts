@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
+import { ResponseDto } from "@/shared/dto/response.dto.js";
 import { UsersUseCases } from "../application/users.usescases.js";
-import { ResponseDto } from "../../../shared/dto/response.dto.js";
 
 export class UsersController{
     constructor(private usersUseCases:UsersUseCases){}
@@ -72,4 +72,3 @@ export class UsersController{
         }
     }
 }
-

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { CompaniesValidator } from "./companies.validator.js";
 import { CompaniesController } from "./companies.controller.js";
 import { CompaniesRepository } from "./companies.repository.js";
-import { validateIdParam } from "../../../shared/validators.shared.js";
+import { validateIdParam } from "@/shared/validators.shared.js";
 import { CompaniesUseCases } from "../application/companies.usescases.js";
 
 export const CompaniesRouter = Router();

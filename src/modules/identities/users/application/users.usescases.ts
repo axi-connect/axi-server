@@ -1,9 +1,9 @@
 import { hash } from 'bcrypt';
 import { User } from "@prisma/client";
 import { UsersRepository } from "../infrastructure/users.repository.js";
+import { RbacRepository } from "@/modules/rbac/infrastructure/rbac.repository.js";
 import { CreateUserInput, UpdateUserInput, UserSearchInterface } from "../domain/repository.interface.js";
-import { CompaniesRepository } from "../../companies/infrastructure/companies.repository.js";
-import { RbacRepository } from "../../rbac/infrastructure/rbac.repository.js";
+import { CompaniesRepository } from "@/modules/identities/companies/infrastructure/companies.repository.js";
 
 export class UsersUseCases{
     private companiesRepository: CompaniesRepository;

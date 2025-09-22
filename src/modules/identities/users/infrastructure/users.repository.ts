@@ -1,6 +1,6 @@
 import { PrismaClient, User } from "@prisma/client";
+import { normalizeTextValue } from "@/shared/utils/utils.shared.js";
 import { UsersRepositoryInterface, CreateUserInput, UpdateUserInput, UserSearchInterface, UserSummaryDTO, UserDetailDTO } from "../domain/repository.interface.js";
-import { normalizeTextValue } from "../../../shared/utils/utils.shared.js";
 
 export class UsersRepository implements UsersRepositoryInterface{
     private db:PrismaClient;

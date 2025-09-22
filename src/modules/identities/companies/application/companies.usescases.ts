@@ -1,4 +1,4 @@
-import { HttpError } from "../../../shared/errors/http.error.js";
+import { HttpError } from "@/shared/errors/http.error.js";
 import { CompaniesRepository } from "../infrastructure/companies.repository.js";
 import { CreateCompanyInput, UpdateCompanyInput, CompanyWithSchedule, CompanySearchInterface } from "../domain/repository.interface.js";
 

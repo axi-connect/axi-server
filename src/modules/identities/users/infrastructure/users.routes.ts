@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { UsersValidator, UsersSearchValidator } from "./users.validator.js";
 import { UsersController } from "./users.controller.js";
 import { UsersRepository } from "./users.repository.js";
+import { validateIdParam } from "@/shared/validators.shared.js";
 import { UsersUseCases } from "../application/users.usescases.js";
-import { validateIdParam } from "../../../shared/validators.shared.js";
+import { UsersValidator, UsersSearchValidator } from "./users.validator.js";
 
 export const UsersRouter = Router();
 const usersRepository = new UsersRepository();

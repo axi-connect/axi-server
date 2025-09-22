@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { WhatsappUseCases } from "../application/whatsapp.usescases.js";
 import { WhatsappController } from "./whatsapp.controller.js";
-import { AgentsRepository } from "../../../agents/infrastructure/agents.repository.js";
+import { WhatsappUseCases } from "../application/whatsapp.usescases.js";
+import { AgentsRepository } from "@/modules/identities/agents/infrastructure/agents.repository.js";
 
 export const WhatsappRoutes = Router();
 const agentsRepository = new AgentsRepository();

@@ -1,6 +1,6 @@
 import { PrismaClient, Agent, AgentStatus } from "@prisma/client";
+import { normalizeTextValue } from "@/shared/utils/utils.shared.js";
 import { AgentsRepositoryInterface, AgentWithRelations, CreateAgentInput, UpdateAgentInput, AgentSearchInterface, AgentSummaryDTO, AgentDetailDTO } from "../domain/repository.interface.js";
-import { normalizeTextValue } from "../../../shared/utils/utils.shared.js";
 
 export class AgentsRepository implements AgentsRepositoryInterface{
     private db:PrismaClient;

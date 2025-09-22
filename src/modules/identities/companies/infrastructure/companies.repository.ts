@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { normalizeTextValue } from "../../../shared/utils/utils.shared.js";
+import { normalizeTextValue } from "@/shared/utils/utils.shared.js";
 import { CompanyWithSchedule, CreateCompanyInput, UpdateCompanyInput, CompanySearchInterface, CompanyDetailDTO, CompanySummaryDTO } from "../domain/repository.interface.js";
 
 /**
