@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { UsersRouter } from "../../users/infrastructure/users.routes.js";
-import { AgentsRouter } from "../../agents/infrastructure/agents.routes.js";
-import { CompaniesRouter } from "../../companies/infrastructure/companies.routes.js";
+import { UsersRouter } from "../users/infrastructure/users.routes.js";
+import { AgentsRouter } from "../agents/infrastructure/agents.routes.js";
+import { CompaniesRouter } from "../companies/infrastructure/companies.routes.js";
 
 export const IdentitiesRouter = Router();
 
