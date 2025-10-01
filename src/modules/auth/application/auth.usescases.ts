@@ -6,9 +6,9 @@ import { CreateUserInput } from "@/modules/identities/users/domain/repository.in
 import { UsersRepository } from "@/modules/identities/users/infrastructure/users.repository.js";
 
 export class AuthUsesCases{
+    private tokenService: TokenService;
     private usersUseCases:UsersUseCases;
     private usersRepository:UsersRepository;
-    private tokenService: TokenService;
 
     constructor(){
         this.usersRepository = new UsersRepository();
@@ -17,7 +17,7 @@ export class AuthUsesCases{
     }
 
     async login(data:any){
-        const users = await this.usersRepository.getUser({value: data.email, column: 'email'});
+        const users = await this.usersRepository.getUserWithPassword({value: data.email, column: 'email'});
         if(!users.length) throw new Error('No existe el usuario');
 
         const user = users[0];

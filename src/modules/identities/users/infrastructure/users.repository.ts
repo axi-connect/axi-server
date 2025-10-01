@@ -9,12 +9,24 @@ export class UsersRepository implements UsersRepositoryInterface{
         this.db = new PrismaClient;
     }
 
-    async getUser(options?:{value?:any, column?:string}):Promise<User[]>{
+    async getUser(options?:{value?:any, column?:string}):Promise<Omit<User, 'password'>[]>{
+        const value = options?.value;
+        const column = options?.column ?? 'id';
+        return await this.db.user.findMany({
+            select: {
+                id: true, name: true, email: true, phone: true, role_id: true, company_id: true, avatar: true,
+                role: { select: { name: true, id: true, description: true, code: true, hierarchy_level: true, state: true } },
+                company: { select: { name: true, id: true, activity_description: true, nit: true, address: true, city: true, industry: true, isotype: true} }
+            },
+            where: value ? {[column]: value} : undefined,
+        });
+    }
+
+    async getUserWithPassword(options?:{value?:any, column?:string}):Promise<User[]>{
         const value = options?.value;
         const column = options?.column ?? 'id';
         return await this.db.user.findMany({
             where: value ? {[column]: value} : undefined,
-            include: { role: true, company: true }
         });
     }
 

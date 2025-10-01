@@ -18,7 +18,7 @@ export class UsersUseCases{
         this.cloudinaryRepository = new CloudinaryRepository();
     }
 
-    async list(user_id?:number):Promise<User[]>{
+    async list(user_id?:number):Promise<Omit<User, 'password'>[]>{
         return await this.usersRepository.getUser({value: user_id});
     }
 
@@ -80,6 +80,8 @@ export class UsersUseCases{
             const exists = await this.usersRepository.existsByEmailOrPhone(user_data.email, user_data.phone, user_id);
             if(exists) throw new HttpError(409, 'Correo o teléfono ya registrados');
         }
+
+        console.log(user_data);
 
         return await this.usersRepository.updateUser(user_id, user_data);
     }

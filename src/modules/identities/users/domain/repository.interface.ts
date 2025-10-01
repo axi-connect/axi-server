@@ -17,8 +17,9 @@ export interface UpdateUserInput{
     company_id?: number;
 }
 export interface UsersRepositoryInterface{
-    getUser(options?:{value?:any, column?:string}):Promise<User[]>
     createUser(user_data:CreateUserInput):Promise<Omit<User, 'password'>>
+    getUserWithPassword(options?:{value?:any, column?:string}):Promise<User[]>
+    getUser(options?:{value?:any, column?:string}):Promise<Omit<User, 'password'>[]>
     updateUser(user_id:number, user_data:UpdateUserInput):Promise<Omit<User, 'password'>>
     deleteUser(user_id:number):Promise<User>
 }
