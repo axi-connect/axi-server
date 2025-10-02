@@ -1,5 +1,6 @@
 import { compare } from 'bcrypt';
 import { User } from '@prisma/client';
+import { redisDB } from '@/database/redis.js';
 import { TokenService } from './token.service.js';
 import { UsersRepository } from "@/modules/identities/users/infrastructure/users.repository.js";
 
@@ -33,6 +34,9 @@ export class AuthUsesCases{
             company_id: user.company_id,
         });
 
+        const TTL_REFRESH_TOKEN_SECONDS = 60 * 60 * 24 * 7;
+        redisDB.set(`refresh_token:user_id:${user.id}`, refreshToken, { EX: TTL_REFRESH_TOKEN_SECONDS });
+
         const response: any = {
             id: user.id,
             name: user.name,
@@ -49,17 +53,26 @@ export class AuthUsesCases{
         const payload = this.tokenService.verifyToken<any>(refresh_token);
         if (payload.token_type !== 'refresh') throw new Error('Refresh token inválido');
 
-        const access_token = this.tokenService.signAccessToken({
+        const refresh_token_redis = await redisDB.get(`refresh_token:user_id:${payload.id}`);
+        if(!refresh_token_redis) throw new Error('Refresh token inválido');
+        if(refresh_token_redis !== refresh_token) throw new Error('Refresh token inválido');
+
+        const accessToken = this.tokenService.signAccessToken({
             id: payload.id,
             email: payload.email,
             role_id: payload.role_id,
             company_id: payload.company_id,
         });
-        return { access_token };
+        
+        return { accessToken };
     }
 
     async me(user_id:number):Promise<Omit<User, 'password'>>{ 
         const user = await this.usersRepository.getUser({value: user_id});
         return user[0];
+    }
+
+    async logout(user_id:number):Promise<void>{
+        await redisDB.del(`refresh_token:user_id:${user_id}`);
     }
 }

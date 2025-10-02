@@ -30,7 +30,13 @@ export class AuthController{
     }
 
     logout = async (_req: Request, res: Response) => {
-        // Stateless JWT: no server-side invalidation by default. If using a store, implement blacklist here.
+        const req = _req as Request & { user_id: number };
+        if(!req.user_id){
+            const response = new ResponseDto(false, 'No autorizado', null, 401);
+            res.status(401).json(response);
+            return;
+        }
+        await this.authUsesCases.logout(req.user_id);
         const response = new ResponseDto(true, 'Sesión cerrada', null, 200);
         res.status(200).json(response);
     }

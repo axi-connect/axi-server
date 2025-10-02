@@ -38,7 +38,6 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
     req.user_email = payload.email;
     next();
   } catch (err: any) {
-    console.log('error --->', err);
     const response = new ResponseDto(false, 'No autorizado', null, 401);
     res.status(401).json(response);
   }

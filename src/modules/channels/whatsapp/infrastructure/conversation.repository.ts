@@ -1,4 +1,5 @@
-import { redisDB } from '../../../../database/redis.js';
+
+import { redisDB } from '@/database/redis.js';
 import { contact, message } from '../domain/conversation.interface.js';
 
 interface redis_client {
