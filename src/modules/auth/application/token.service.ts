@@ -56,5 +56,3 @@ function parseTtlToSeconds(input: string): number {
     default: return 900;
   }
 }
-
-

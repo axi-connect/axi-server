@@ -1,19 +1,15 @@
 import { compare } from 'bcrypt';
 import { User } from '@prisma/client';
 import { TokenService } from './token.service.js';
-import { UsersUseCases } from "@/modules/identities/users/application/users.usescases.js";
-import { CreateUserInput } from "@/modules/identities/users/domain/repository.interface.js";
 import { UsersRepository } from "@/modules/identities/users/infrastructure/users.repository.js";
 
 export class AuthUsesCases{
     private tokenService: TokenService;
-    private usersUseCases:UsersUseCases;
     private usersRepository:UsersRepository;
 
     constructor(){
-        this.usersRepository = new UsersRepository();
-        this.usersUseCases = new UsersUseCases(this.usersRepository);
         this.tokenService = new TokenService();
+        this.usersRepository = new UsersRepository();
     }
 
     async login(data:any){
@@ -24,13 +20,13 @@ export class AuthUsesCases{
         const isValid = await compare(data.password, user.password);
         if(!isValid) throw new Error('Contraseña incorrecta');
 
-        const access_token = this.tokenService.signAccessToken({
+        const accessToken = this.tokenService.signAccessToken({
             id: user.id,
             email: user.email,
             role_id: user.role_id,
             company_id: user.company_id,
         });
-        const refresh_token = this.tokenService.signRefreshToken({
+        const refreshToken = this.tokenService.signRefreshToken({
             id: user.id,
             email: user.email,
             role_id: user.role_id,
@@ -41,40 +37,12 @@ export class AuthUsesCases{
             id: user.id,
             name: user.name,
             email: user.email,
-            phone: user.phone,
-            role_id: user.role_id,
-            company_id: user.company_id,
-            access_token,
-            refresh_token,
+            tokens: {
+                accessToken,
+                refreshToken,
+            }
         };
         return response;      
-    }
-
-    async signup(user_data:CreateUserInput):Promise<User>{
-        const user = await this.usersUseCases.create(user_data);
-        const access_token = this.tokenService.signAccessToken({
-            id: user.id,
-            email: user.email,
-            role_id: user.role_id,
-            company_id: user.company_id,
-        });
-        const refresh_token = this.tokenService.signRefreshToken({
-            id: user.id,
-            email: user.email,
-            role_id: user.role_id,
-            company_id: user.company_id,
-        });
-        const response: any = {
-            id: (user as any).id,
-            name: (user as any).name,
-            email: (user as any).email,
-            phone: (user as any).phone,
-            role_id: (user as any).role_id,
-            company_id: (user as any).company_id,
-            access_token,
-            refresh_token,
-        };
-        return response;
     }
 
     async refresh(refresh_token: string){
@@ -88,5 +56,10 @@ export class AuthUsesCases{
             company_id: payload.company_id,
         });
         return { access_token };
+    }
+
+    async me(user_id:number):Promise<Omit<User, 'password'>>{ 
+        const user = await this.usersRepository.getUser({value: user_id});
+        return user[0];
     }
 }

@@ -17,17 +17,6 @@ export class AuthController{
         }
     }
 
-    signup = async(req: Request, res: Response)=>{
-        try {
-            const data = await this.authUsesCases.signup(req.body)
-            const response = new ResponseDto(true, 'Bienvenido', data, 200);
-            res.status(200).json(response);
-        } catch (error:any) {
-            const response = new ResponseDto(false, error.message, null, 500);
-            res.status(500).json(response);
-        }
-    }
-
     refresh = async (req: Request, res: Response) => {
         try {
             const { refresh_token } = req.body as { refresh_token: string };
@@ -44,5 +33,22 @@ export class AuthController{
         // Stateless JWT: no server-side invalidation by default. If using a store, implement blacklist here.
         const response = new ResponseDto(true, 'Sesión cerrada', null, 200);
         res.status(200).json(response);
+    }
+
+    me = async(req: Request, res: Response) => {
+        try {
+            const userId = req.user_id;
+            if(!userId){
+                const response = new ResponseDto(false, 'No autorizado', null, 401);
+                res.status(401).json(response);
+                return;
+            }
+            const data = await this.authUsesCases.me(Number(userId));
+            const response = new ResponseDto(true, 'Usuario', data, 200);
+            res.status(200).json(response);
+        } catch (error: any) {
+            const response = new ResponseDto(false, error.message, null, 500);
+            res.status(500).json(response);
+        }
     }
 }
