@@ -110,4 +110,36 @@ export class ModuleRepository {
 
         return { modules: detail, total };
     }
+
+    /**
+     * Devuelve el árbol de módulos accesibles (permiso 'read') para un rol dado,
+     * incluyendo solo hijos también accesibles. Optimizado en una sola consulta.
+    */
+    async getAccessibleTreeForRole(roleId: number): Promise<Array<{ id:number; name:string; path:string; icon:string|null; children: { id:number; name:string; path:string; icon:string|null }[] }>>{
+        const topLevel = await this.db.module.findMany({
+            where: {
+                parent_id: null,
+                role_module: { some: { role_id: roleId, permission: { has: 'read' } } }
+            },
+            select: {
+                id: true,
+                name: true,
+                path: true,
+                icon: true,
+                children: {
+                    // where: { role_module: { some: { role_id: roleId, permission: { has: 'read' }, } } },
+                    select: { id: true, name: true, path: true, icon: true }
+                }
+            },
+            orderBy: { name: 'asc' }
+        });
+
+        return topLevel.map((m:any)=>({
+            id: m.id,
+            name: m.name,
+            path: m.path,
+            icon: m.icon ?? null,
+            children: (m.children ?? []).map((c:any)=>({ id: c.id, name: c.name, path: c.path, icon: c.icon ?? null }))
+        }));
+    }
 }

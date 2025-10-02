@@ -1,6 +1,6 @@
 import { PrismaClient, User } from "@prisma/client";
 import { normalizeTextValue } from "@/shared/utils/utils.shared.js";
-import { UsersRepositoryInterface, CreateUserInput, UpdateUserInput, UserSearchInterface, UserSummaryDTO, UserDetailDTO } from "../domain/repository.interface.js";
+import { UsersRepositoryInterface, CreateUserInput, UpdateUserInput, UserSearchInterface, UserSummaryDTO, UserDetailDTO, UserAuth } from "../domain/repository.interface.js";
 
 export class UsersRepository implements UsersRepositoryInterface{
     private db:PrismaClient;
@@ -9,7 +9,7 @@ export class UsersRepository implements UsersRepositoryInterface{
         this.db = new PrismaClient;
     }
 
-    async getUser(options?:{value?:any, column?:string}):Promise<Omit<User, 'password'>[]>{
+    async getUser(options?:{value?:any, column?:string}):Promise<UserAuth[]>{
         const value = options?.value;
         const column = options?.column ?? 'id';
         return await this.db.user.findMany({

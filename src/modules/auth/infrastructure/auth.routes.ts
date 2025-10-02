@@ -10,6 +10,7 @@ const authUsesCases = new AuthUsesCases();
 const authController = new AuthController(authUsesCases);
 
 AuthRouter.get('/me', authenticate, authController.me);
+AuthRouter.get('/me/sidebar', authenticate, authController.sidebar);
 AuthRouter.post('/login', AuthValidator.validateLogin, authController.login);
 AuthRouter.post('/refresh', AuthValidator.validateRefresh, authController.refresh);
 AuthRouter.post('/logout', authenticate, AuthValidator.validateLogout, authController.logout);

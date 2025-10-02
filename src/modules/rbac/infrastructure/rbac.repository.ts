@@ -75,6 +75,10 @@ export class RbacRepository implements rbacRepositoryInterface {
         return this.moduleRepo.findModulesDetail(search);
     }
 
+    async getAccessibleTreeForRole(roleId: number){
+        return this.moduleRepo.getAccessibleTreeForRole(roleId);
+    }
+
     // Overview
     async getOverview(search: OverviewSearchInterface): Promise<any>{
         return this.overviewRepo.getOverview(search);

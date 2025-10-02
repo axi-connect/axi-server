@@ -2,14 +2,17 @@ import { compare } from 'bcrypt';
 import { User } from '@prisma/client';
 import { redisDB } from '@/database/redis.js';
 import { TokenService } from './token.service.js';
+import { RbacRepository } from "@/modules/rbac/infrastructure/rbac.repository.js";
 import { UsersRepository } from "@/modules/identities/users/infrastructure/users.repository.js";
 
 export class AuthUsesCases{
     private tokenService: TokenService;
     private usersRepository:UsersRepository;
+    private rbacRepository:RbacRepository;
 
     constructor(){
         this.tokenService = new TokenService();
+        this.rbacRepository = new RbacRepository();
         this.usersRepository = new UsersRepository();
     }
 
@@ -74,5 +77,47 @@ export class AuthUsesCases{
 
     async logout(user_id:number):Promise<void>{
         await redisDB.del(`refresh_token:user_id:${user_id}`);
+    }
+
+    async sidebar(user_id:number):Promise<any>{
+        const [user] = await this.usersRepository.getUser({value: user_id});
+        if(!user) throw new Error('Usuario no encontrado');
+
+        const tree = await this.rbacRepository.getAccessibleTreeForRole(user.role_id);
+        
+        const platformItems:any[] = [];
+
+        for (const mod of tree){
+           const sidebarItem = {
+                title: mod.name,
+                url: mod.path,
+                icon: mod.icon,
+                children: mod.children.map((child:any) => ({ title: child.name, url: child.path, icon: child.icon }))
+           }
+
+           platformItems.push(sidebarItem);
+        }
+
+        const sidebar = [
+            {
+                label: 'Platform',
+                items: platformItems
+            },
+            {
+                label: "Recursos",
+                items: [
+                  { title: "Guías y API", url: "#", icon: 'BookOpen' },
+                  { title: "Ayuda", url: "#", icon: 'HelpCircle' },
+                ],
+              },
+            {
+                label: "Perfil",
+                items: [
+                    { title: "Cerrar sesión", url: "/auth/logout", icon: 'LogOut' },
+                ],
+            },
+        ]
+
+        return sidebar;
     }
 }

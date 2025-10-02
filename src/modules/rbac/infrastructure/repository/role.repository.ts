@@ -1,5 +1,5 @@
 import { PrismaClient, Role, permission_type } from "@prisma/client";
-import { normalizeTextValue } from "../../../../shared/utils/utils.shared.js";
+import { normalizeTextValue } from "@/shared/utils/utils.shared.js";
 import { RoleDetailDTO, RoleSearchInterface, RoleSummaryDTO } from "../../domain/repository.interface.js";
 
 export class RoleRepository {

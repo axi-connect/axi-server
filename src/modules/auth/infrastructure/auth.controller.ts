@@ -57,4 +57,17 @@ export class AuthController{
             res.status(500).json(response);
         }
     }
+
+    sidebar = async(req: Request, res: Response) => {
+        try {
+            const userId = req.user_id;
+            if(!userId) throw new Error('No autorizado');
+            const data = await this.authUsesCases.sidebar(Number(userId));
+            const response = new ResponseDto(true, 'Sidebar', data, 200);
+            res.status(200).json(response);
+        }catch(error: any){
+            const response = new ResponseDto(false, error.message, null, 500);
+            res.status(500).json(response);
+        }
+    }
 }

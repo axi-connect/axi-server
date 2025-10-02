@@ -1,4 +1,10 @@
-import { User } from "@prisma/client";
+import { Company, Role, User } from "@prisma/client";
+
+export interface UserAuth extends Omit<User, 'password'>{
+    role: Role;
+    company: Company;
+}
+
 export interface CreateUserInput{
     name:string;
     phone: string;
