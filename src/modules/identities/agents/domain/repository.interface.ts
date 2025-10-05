@@ -60,6 +60,11 @@ export interface UpdateAgentInput{
     name?:string;
     phone?:string;
     alive?:boolean;
+    status?: AgentStatus;
+    channel?: ChannelType;
+    company_id?: number;
+    character_id?: number | null;
+    skills?: string[];
 }
 
 export interface AgentsRepositoryInterface{

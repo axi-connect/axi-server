@@ -13,13 +13,18 @@ export class AgentsController{
             if(req.params.id){
                 const id = Number(req.params.id);
                 const agents = await this.agentsUseCases.list(id);
-                const response = new ResponseDto(true, 'Agente obtenido correctamente', (agents[0] ?? null) as any, 200);
+                const entity = agents[0] ?? null;
+                if(!entity){
+                    const response404 = new ResponseDto(false, 'Agente no encontrado', null, 404);
+                    res.status(404).json(response404);
+                    return;
+                }
+                const response = new ResponseDto(true, 'Agente obtenido correctamente', entity as any, 200);
                 res.status(200).json(response);
                 return;
             }
             const {name, phone, company_id, alive, limit, offset, view, sortBy, sortDir} = (res.locals.search ?? req.query);
-            console.log('res.locals.search', res.locals.search);
-            console.log('req.query', req.query);
+            
             const result = await this.agentsUseCases.search({
                 name, phone,
                 company_id: company_id ? Number(company_id) : undefined,
@@ -30,11 +35,13 @@ export class AgentsController{
                 sortBy,
                 sortDir
             });
+            
             const response = new ResponseDto(true, 'Agentes obtenidos correctamente', result as any, 200);
             res.status(200).json(response);
         }catch(error:any){
-            const response = new ResponseDto(false, error?.message || 'Error al obtener agentes', null, 500);
-            res.status(500).json(response);
+            const status = error?.statusCode ?? 500;
+            const response = new ResponseDto(false, error?.message || 'Error al obtener agentes', null, status);
+            res.status(status).json(response);
         }
     }
 

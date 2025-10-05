@@ -9,6 +9,18 @@ export class AgentsRepository implements AgentsRepositoryInterface{
         this.db = new PrismaClient;
     }
 
+    async createAgent(agent_data:CreateAgentInput):Promise<Agent>{
+        const data:any = { ...agent_data };
+        if(!data.status) data.status = AgentStatus.available;
+        if(!data.skills) data.skills = [];
+        return await this.db.agent.create({
+            data,
+            include: {
+                agentIntention: true
+            }
+        })
+    }
+
     async getAgent(value?:any, column:string='id'):Promise<AgentWithRelations[]>{
         return await this.db.agent.findMany({
             where: value ? {[column]: value} : undefined,
@@ -22,29 +34,6 @@ export class AgentsRepository implements AgentsRepositoryInterface{
                 }
             }
         }) as unknown as AgentWithRelations[];
-    }
-
-    async createAgent(agent_data:CreateAgentInput):Promise<Agent>{
-        const data:any = { ...agent_data };
-        if(!data.status) data.status = AgentStatus.available;
-        if(!data.skills) data.skills = [];
-        return await this.db.agent.create({
-            data,
-            include: {
-                agentIntention: true
-            }
-        })
-    }
-
-    async updateAgent(agent_id:number, agent_data:UpdateAgentInput):Promise<Agent>{
-        return await this.db.agent.update({
-            where: {id: agent_id},
-            data: agent_data
-        })
-    }
-
-    async deleteAgent(agent_id:number):Promise<Agent>{
-        return await this.db.agent.delete({where: {id: agent_id}})
     }
 
     async findAgentsSummary(search:AgentSearchInterface = {}):Promise<{agents: AgentSummaryDTO[], total:number}>{
@@ -101,5 +90,54 @@ export class AgentsRepository implements AgentsRepositoryInterface{
             agentIntention: a.agentIntention
         })) as AgentDetailDTO[];
         return {agents: detail, total};
+    }
+
+    async updateAgent(agent_id:number, agent_data:UpdateAgentInput):Promise<Agent>{
+        const data:any = {
+            name: agent_data.name,
+            phone: agent_data.phone,
+            alive: agent_data.alive,
+            status: agent_data.status,
+            channel: agent_data.channel,
+            skills: agent_data.skills,
+            // company_id: agent_data.company_id,
+        };
+
+        // Relations
+        if(typeof (agent_data as any).company_id === 'number'){
+            data.company = { connect: { id: (agent_data as any).company_id } };
+        }
+        if((agent_data as any).character_id !== undefined){
+            const cid = (agent_data as any).character_id as any;
+            if(cid === null){
+                data.character = { disconnect: true };
+            } else if(typeof cid === 'number'){
+                data.character = { connect: { id: cid } };
+            }
+        }
+
+        if(Array.isArray((agent_data as any).intentions)){
+            const intentions = (agent_data as any).intentions;
+            data.agentIntention = {
+                deleteMany: {},
+                create: intentions.map((i:any)=>({
+                    requirements: i.requirements,
+                    intention: { connect: { id: i.intention_id } },
+                    ...(i.ai_requirement_id ? { ai_requirement: { connect: { id: i.ai_requirement_id } } } : {})
+                }))
+            };
+        }
+
+        return await this.db.agent.update({
+            data,
+            include: {
+                agentIntention: true
+            },
+            where: { id: agent_id },
+        })
+    }
+
+    async deleteAgent(agent_id:number):Promise<Agent>{
+        return await this.db.agent.delete({where: {id: agent_id}})
     }
 }

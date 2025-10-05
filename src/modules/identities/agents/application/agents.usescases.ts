@@ -15,24 +15,16 @@ export class AgentsUseCases{
         this.parametersRepository = new ParametersRepository();
     }
 
-    async list(agent_id?:number):Promise<Agent[]>{
-        return await this.agentsRepository.getAgent(agent_id);
-    }
-
-    async search(search?:AgentSearchInterface):Promise<{agents:any[], total:number}>{
-        const mode = search?.view === 'detail' ? 'detail' : 'summary';
-        if(mode === 'detail') return await (this.agentsRepository as any).findAgentsDetail(search);
-        return await (this.agentsRepository as any).findAgentsSummary(search);
-    }
-
-    async getByClientId(client_id:string):Promise<Agent[]>{
-        return await this.agentsRepository.getAgent(client_id, 'client_id');
-    }
-
     async create(payload:CreateAgentPayload):Promise<Agent>{
         // Validaciones de relaciones
         const company = await this.companiesRepository.getCompany(payload.company_id);
         if(!company.length) throw new Error('La empresa no existe');
+
+        // Validar character si llega
+        if (typeof payload.character_id === 'number'){
+            const characters = await this.parametersRepository.findAgentCharacters({ id: payload.character_id, limit: 1, offset: 0 });
+            if(!characters.characters.length) throw new HttpError(404, 'Personaje no encontrado');
+        }
 
         // Validar intenciones si llegan
         const intentions = payload.intentions ?? [];
@@ -68,13 +60,35 @@ export class AgentsUseCases{
         return await this.agentsRepository.createAgent(createInput);
     }
 
+    async list(agent_id?:number):Promise<Agent[]>{
+        return await this.agentsRepository.getAgent(agent_id);
+    }
+
+    async search(search?:AgentSearchInterface):Promise<{agents:any[], total:number}>{
+        const mode = search?.view === 'detail' ? 'detail' : 'summary';
+        if(mode === 'detail') return await (this.agentsRepository as any).findAgentsDetail(search);
+        return await (this.agentsRepository as any).findAgentsSummary(search);
+    }
+
+    async getByClientId(client_id:string):Promise<Agent[]>{
+        return await this.agentsRepository.getAgent(client_id, 'client_id');
+    }
+
     async update(agent_id:number, agent_data:UpdateAgentInput):Promise<Agent>{
         const exists = await this.agentsRepository.getAgent(agent_id);
         if(!exists.length) throw new HttpError(404, 'Agente no encontrado');
 
-        if(typeof (agent_data as any).company_id === 'number'){
-            const company = await this.companiesRepository.getCompany((agent_data as any).company_id);
+        if(typeof agent_data.company_id === 'number'){
+            const company = await this.companiesRepository.getCompany(agent_data.company_id);
             if(!company.length) throw new HttpError(404, 'La empresa no existe');
+        }
+        if(typeof agent_data.character_id === 'number'){
+            const characters = await this.parametersRepository.findAgentCharacters({ id: agent_data.character_id, limit: 1, offset: 0 });
+            if(!characters.characters.length) throw new HttpError(404, 'Personaje no encontrado');
+        }
+        if(typeof agent_data.phone === 'string'){
+            const duplicate = await this.agentsRepository.getAgent(agent_data.phone, 'phone');
+            if(duplicate.length && duplicate[0].id !== agent_id) throw new HttpError(409, 'El teléfono ya existe');
         }
 
         return await this.agentsRepository.updateAgent(agent_id, agent_data);

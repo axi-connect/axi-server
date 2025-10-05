@@ -27,22 +27,20 @@ const intentionItemSchema = Joi.object({
     }).required().label('requisitos')
 });
 
-const agentCreateSchema = Joi.object({
-    name: Joi.string().min(3).required().label('nombre'),
-    phone: Joi.string().min(3).required().label('teléfono'),
-    status: Joi.string().valid('available','busy','away','offline','training','meeting','on_break').required().label('estado'),
-    channel: Joi.string().valid('whatsapp','email','call','instagram','facebook','telegram').required().label('canal'),
-    company_id: Joi.number().required().label('empresa'),
-    character_id: Joi.number().label('personaje'),
-    skills: Joi.array().items(Joi.string().trim()).min(1).required().label('habilidades'),
-    intentions: Joi.array().items(intentionItemSchema).label('intenciones')
-}).messages(baseMessages);
-
-const agentUpdateSchema = Joi.object({
-    name: Joi.string().label('nombre'),
-    phone: Joi.string().label('teléfono'),
+const agentBaseSchema = {
+    name: Joi.string().min(3).label('nombre'),
+    phone: Joi.string().min(3).label('teléfono'),
+    status: Joi.string().valid('available','busy','away','offline','training','meeting','on_break').label('estado'),
+    channel: Joi.string().valid('whatsapp','email','call','instagram','facebook','telegram').label('canal'),
+    company_id: Joi.number().label('empresa'),
+    character_id: Joi.alternatives().try(Joi.number(), Joi.valid(null)).label('personaje'),
+    skills: Joi.array().items(Joi.string().trim()).min(1).label('habilidades'),
+    intentions: Joi.array().items(intentionItemSchema).label('intenciones'),
     alive: Joi.boolean().label('disponible'),
-}).messages(baseMessages);
+};
+
+const agentCreateSchema = Joi.object(agentBaseSchema).fork(['name','phone','status','channel','company_id','skills'], (s)=> s.required()).messages(baseMessages);
+const agentUpdateSchema = Joi.object(agentBaseSchema).min(1).messages(baseMessages);
 
 export class AgentsValidator{
     /**
@@ -63,7 +61,7 @@ export class AgentsValidator{
      * Retorna 400 con ResponseDto si la entrada es inválida
     */
     static validateUpdate(req: Request, res: Response, next: NextFunction):void{
-        const {error} = agentUpdateSchema.validate(req.body, { abortEarly: false, errors: { wrap: { label: '' } } });
+        const {error} = agentUpdateSchema.validate(req.body, { abortEarly: false, convert: true, errors: { wrap: { label: '' } } });
         if(error){
             const message = error.details.map(d => d.message).join(', ');
             const response = new ResponseDto(false, message, null, 400);
