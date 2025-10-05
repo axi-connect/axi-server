@@ -1,4 +1,4 @@
-import { Agent, AgentIntention, AIRequirement, Intention, Company, AgentStatus } from "@prisma/client";
+import { Agent, AgentIntention, AIRequirement, Intention, Company, AgentStatus, ChannelType } from "@prisma/client";
 
 export interface AgentIntentionDependency extends AgentIntention{
     intention: Intention
@@ -25,11 +25,35 @@ export interface CreateAgentInput{
     phone:string;
     client_id?:string;
     company_id:number;
+    channel: ChannelType;
+    character_id?: number;
     agentIntention: {
         create: CreateAgentIntentionInput[]
     }
     status?: AgentStatus;
     skills: string[];
+}
+
+// Payload esperado desde la API para crear agente
+export interface CreateAgentPayload{
+    name: string;
+    phone: string;
+    status: AgentStatus;
+    channel: ChannelType;
+    company_id: number;
+    skills: string[];
+    character_id?: number;
+    intentions?: Array<{
+        intention_id: number;
+        ai_requirement_id?: number;
+        requirements: {
+            require_catalog: boolean;
+            require_schedule: boolean;
+            require_sheet: boolean;
+            require_db: boolean;
+            require_reminder: boolean;
+        }
+    }>;
 }
 
 export interface UpdateAgentInput{
@@ -72,4 +96,3 @@ export interface AgentDetailDTO extends AgentSummaryDTO{
     company: {id:number, name:string};
     agentIntention: AgentIntentionDependency[];
 }
-

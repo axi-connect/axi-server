@@ -3,7 +3,7 @@ import { Agent } from "@prisma/client";
 import { HttpError } from "@/shared/errors/http.error.js";
 import { AgentsRepository } from "../infrastructure/agents.repository.js";
 import { ParametersRepository } from "@/modules/parameters/infrastructure/parameters.repository.js";
-import { CreateAgentInput, UpdateAgentInput, AgentSearchInterface } from "../domain/repository.interface.js";
+import { CreateAgentInput, UpdateAgentInput, AgentSearchInterface, CreateAgentPayload } from "../domain/repository.interface.js";
 import { CompaniesRepository } from "@/modules/identities/companies/infrastructure/companies.repository.js";
 
 export class AgentsUseCases{
@@ -29,16 +29,43 @@ export class AgentsUseCases{
         return await this.agentsRepository.getAgent(client_id, 'client_id');
     }
 
-    async create(agent_data:CreateAgentInput):Promise<Agent>{
-        const company = await this.companiesRepository.getCompany(agent_data.company_id);
+    async create(payload:CreateAgentPayload):Promise<Agent>{
+        // Validaciones de relaciones
+        const company = await this.companiesRepository.getCompany(payload.company_id);
         if(!company.length) throw new Error('La empresa no existe');
 
-        const intentionIDs = agent_data.agentIntention.create.map(item => item.intention_id);
-        const intentionDB = await this.parametersRepository.getIntention(intentionIDs);
-        if(intentionDB.length != intentionIDs.length) throw new Error("Las funciones asignadas del agente no existen");
+        // Validar intenciones si llegan
+        const intentions = payload.intentions ?? [];
+        if (intentions.length){
+            const intentionIDs = intentions.map(item => item.intention_id);
+            const intentionDB = await this.parametersRepository.getIntention(intentionIDs);
+            if(intentionDB.length != intentionIDs.length) throw new Error("Las funciones asignadas del agente no existen");
+        }
 
-        agent_data.client_id = randomUUID();
-        return await this.agentsRepository.createAgent(agent_data);
+        // Validate Unique Constraints Phone
+        const duplicate = await this.agentsRepository.getAgent(payload.phone, 'phone');
+        if(duplicate.length) throw new Error('El teléfono ya existe');
+
+        // Mapear payload a CreateAgentInput para repositorio
+        const createInput:CreateAgentInput = {
+            name: payload.name,
+            phone: payload.phone,
+            status: payload.status,
+            channel: payload.channel,
+            company_id: payload.company_id,
+            character_id: payload.character_id,
+            skills: payload.skills,
+            client_id: randomUUID(),
+            agentIntention: {
+                create: intentions.map(i => ({
+                    intention_id: i.intention_id,
+                    requirements: i.requirements,
+                    ai_requirement_id: i.ai_requirement_id ?? null as any,
+                })) as any
+            }
+        };
+
+        return await this.agentsRepository.createAgent(createInput);
     }
 
     async update(agent_id:number, agent_data:UpdateAgentInput):Promise<Agent>{

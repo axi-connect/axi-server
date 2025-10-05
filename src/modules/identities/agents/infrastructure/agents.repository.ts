@@ -103,4 +103,3 @@ export class AgentsRepository implements AgentsRepositoryInterface{
         return {agents: detail, total};
     }
 }
-

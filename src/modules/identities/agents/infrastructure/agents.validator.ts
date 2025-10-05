@@ -4,45 +4,45 @@ import { ResponseDto } from "@/shared/dto/response.dto.js";
 
 const normalizeStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-const agentIntentionSchema = Joi.array().min(1).items(Joi.object({
-    intention_id: Joi.number().required().label('intención'),
-    require_catalog: Joi.boolean().required().label('requiere catálogo'),
-    require_schedule: Joi.boolean().required().label('requiere agenda'),
-    require_db: Joi.boolean().required().label('requiere base de datos'),
-    require_sheet: Joi.boolean().required().label('requiere hoja de cálculo'),
-    require_reminder: Joi.boolean().required().label('requiere recordatorio'),
-    ai_requirement_id: Joi.number().required().label('requisito de IA'),
-})).required().messages({
+const baseMessages = {
     'any.required': 'El campo {#label} es obligatorio',
+    'string.base': 'El campo {#label} debe ser un texto',
+    'array.base': 'El campo {#label} debe ser una lista',
+    'object.base': 'El campo {#label} debe ser un objeto',
     'number.base': 'El campo {#label} debe ser un número',
     'boolean.base': 'El campo {#label} debe ser verdadero o falso',
-    'array.min': 'Debe proporcionar al menos {#limit} elemento(s) en {#label}'
+    'string.min': 'El campo {#label} debe tener al menos {#limit} caracteres',
+    'array.min': 'El campo {#label} debe incluir al menos {#limit} elemento(s)',
+}
+
+const intentionItemSchema = Joi.object({
+    intention_id: Joi.number().required().label('intención'),
+    ai_requirement_id: Joi.number().label('requisito de IA'),
+    requirements: Joi.object({
+        require_catalog: Joi.boolean().required(),
+        require_schedule: Joi.boolean().required(),
+        require_sheet: Joi.boolean().required(),
+        require_db: Joi.boolean().required(),
+        require_reminder: Joi.boolean().required(),
+    }).required().label('requisitos')
 });
 
 const agentCreateSchema = Joi.object({
     name: Joi.string().min(3).required().label('nombre'),
     phone: Joi.string().min(3).required().label('teléfono'),
+    status: Joi.string().valid('available','busy','away','offline','training','meeting','on_break').required().label('estado'),
+    channel: Joi.string().valid('whatsapp','email','call','instagram','facebook','telegram').required().label('canal'),
     company_id: Joi.number().required().label('empresa'),
-    agentIntention: Joi.object({ create: agentIntentionSchema }).required().label('intenciones del agente'),
-    skills: Joi.array().items(Joi.string().trim()).min(1).required().label('habilidades')
-}).messages({
-    'any.required': 'El campo {#label} es obligatorio',
-    'string.base': 'El campo {#label} debe ser un texto',
-    'string.min': 'El campo {#label} debe tener al menos {#limit} caracteres',
-    'number.base': 'El campo {#label} debe ser un número',
-    'array.base': 'El campo {#label} debe ser una lista',
-    'array.min': 'El campo {#label} debe incluir al menos {#limit} elemento(s)',
-    'object.base': 'El campo {#label} debe ser un objeto'
-});
+    character_id: Joi.number().label('personaje'),
+    skills: Joi.array().items(Joi.string().trim()).min(1).required().label('habilidades'),
+    intentions: Joi.array().items(intentionItemSchema).label('intenciones')
+}).messages(baseMessages);
 
 const agentUpdateSchema = Joi.object({
     name: Joi.string().label('nombre'),
     phone: Joi.string().label('teléfono'),
     alive: Joi.boolean().label('disponible'),
-}).messages({
-    'string.base': 'El campo {#label} debe ser un texto',
-    'boolean.base': 'El campo {#label} debe ser verdadero o falso'
-});
+}).messages(baseMessages);
 
 export class AgentsValidator{
     /**
@@ -50,7 +50,7 @@ export class AgentsValidator{
      * Retorna 400 con ResponseDto si la entrada es inválida
     */
     static validateCreate(req: Request, res: Response, next: NextFunction):void{
-        const {error} = agentCreateSchema.validate(req.body, { abortEarly: false, errors: { wrap: { label: '' } } });
+        const {error} = agentCreateSchema.validate(req.body, { abortEarly: false, convert: true, errors: { wrap: { label: '' } } });
         if(error){
             const message = error.details.map(d => d.message).join(', ');
             const response = new ResponseDto(false, message, null, 400);

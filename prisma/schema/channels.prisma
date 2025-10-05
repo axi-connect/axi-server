@@ -1,15 +1,19 @@
-model Agent{
-  id              Int     @id @default(autoincrement())
-  name            String
-  phone           String  @unique
-  alive           Boolean @default(true)
-  client_id       String
-  company_id      Int 
-  company         Company @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  status          AgentStatus
-  skills          String[]
-  agentIntention  AgentIntention[]
-  messages        MessageLog[]
+model Agent {
+  id             Int              @id @default(autoincrement())
+  name           String
+  phone          String           @unique
+  alive          Boolean          @default(true)
+  channel        ChannelType
+  client_id      String
+  company_id     Int
+  character_id   Int?
+  skills         String[]
+  status         AgentStatus
+  messages       MessageLog[]
+  conversations  Conversation[]
+  agentIntention AgentIntention[]
+  character      AgentCharacter?  @relation(fields: [character_id], references: [id])
+  company        Company          @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("agent")
   @@schema("channels")
@@ -34,22 +38,46 @@ enum MessageDirection {
 }
 
 model MessageLog {
-  id            Int               @id @default(autoincrement())
-  entityType    String
-  entityId      Int
-  agentId       Int?
-  channel       ChannelType
-  direction     MessageDirection
-  message       String
-  timestamp     DateTime          @default(now())
-  metadata      Json?
-  conversation_id Int
+  id               Int              @id @default(autoincrement())
+  conversationId   Int
+  agentId          Int?
+  channel          ChannelType
+  direction        MessageDirection
+  message          String
+  timestamp        DateTime         @default(now())
+  metadata         Json?
+  participant_type ParticipantType
+  participant_id   Int?
 
-  agent         Agent?            @relation(fields: [agentId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  agent        Agent?       @relation(fields: [agentId], references: [id])
 
-  @@index([entityType, entityId, timestamp], map: "idx_message_entity_timestamp")
+  @@index([conversationId, timestamp], map: "idx_message_conversation_ts")
   @@index([timestamp], map: "idx_message_timestamp")
   @@map("message_log")
+  @@schema("channels")
+}
+
+model Conversation {
+  id              Int         @id @default(autoincrement())
+  company_id      Int
+  channel         ChannelType
+  agentId         Int?
+  client_id       Int?
+  lead_id         Int?
+  created_at      DateTime    @default(now())
+  updated_at      DateTime    @updatedAt
+  last_message_at DateTime?
+
+  company  Company      @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  agent    Agent?       @relation(fields: [agentId], references: [id])
+  client   Client?      @relation(fields: [client_id], references: [id])
+  lead     Lead?        @relation(fields: [lead_id], references: [id])
+  messages MessageLog[]
+
+  @@index([company_id], map: "idx_conversation_company")
+  @@index([channel], map: "idx_conversation_channel")
+  @@map("conversation")
   @@schema("channels")
 }
 
@@ -61,6 +89,15 @@ enum AgentStatus {
   training
   meeting
   on_break
+
+  @@schema("channels")
+}
+
+enum ParticipantType {
+  agent
+  client
+  lead
+  bot
 
   @@schema("channels")
 }

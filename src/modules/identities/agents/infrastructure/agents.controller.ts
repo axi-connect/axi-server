@@ -39,7 +39,7 @@ export class AgentsController{
     }
 
     /**
-     * Create an agent
+     * Crea un agente con payload enriquecido (status, channel, skills, intentions, character)
     */
     create = async (req: Request, res: Response):Promise<void> => {
         try{
@@ -47,13 +47,14 @@ export class AgentsController{
             const response = new ResponseDto(true, 'Agente creado correctamente', agent as any, 201);
             res.status(201).json(response);
         }catch(error:any){
-            const response = new ResponseDto(false, error?.message || 'Error al crear agente', null, 500);
-            res.status(500).json(response);
+            const status = error?.statusCode ?? 500;
+            const response = new ResponseDto(false, error?.message || 'Error al crear agente', null, status);
+            res.status(status).json(response);
         }
     }
 
     /**
-     * Update an agent
+     * Actualiza un agente (name, phone, alive)
     */
     update = async (req: Request, res: Response):Promise<void> => {
         try{
