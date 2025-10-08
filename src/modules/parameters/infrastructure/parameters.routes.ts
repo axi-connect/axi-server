@@ -13,6 +13,7 @@ const parametersController = new ParametersController(parametersUsesCases);
 
 ParametersRouter.post('/intention', authenticate, ParametersValidator.validateIntentionCreation, parametersController.createIntention);
 ParametersRouter.get('/intention', authenticate, ParametersValidator.validateIntentionSearch, parametersController.listIntentions);
+ParametersRouter.get('/intention/overview', authenticate, parametersController.overviewIntentions);
 ParametersRouter.put('/intention/:id', authenticate, validateIdParam('id'), ParametersValidator.validateIntentionUpdate, parametersController.updateIntention);
 ParametersRouter.delete('/intention/:id', authenticate, validateIdParam('id'), parametersController.deleteIntention);
 

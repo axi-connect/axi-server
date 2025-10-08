@@ -11,6 +11,10 @@ export class ParametersUsesCases{
         return await this.parametersRepository.createIntention(intention_data);
     }
 
+    async overviewIntentions():Promise<any>{
+        return await this.parametersRepository.overviewIntentions();
+    }
+
     async createAgentCharacter(data: AgentCharacterCreateInput):Promise<AgentCharacter>{
         return await this.parametersRepository.createAgentCharacter(data);
     }

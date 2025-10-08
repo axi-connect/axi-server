@@ -56,6 +56,17 @@ export class ParametersController{
         }
     }
 
+    overviewIntentions = async(req: Request, res: Response):Promise<void>=>{
+        try{
+            const result = await this.parametersUsesCases.overviewIntentions();
+            const response = new ResponseDto(true, 'Visión general de intenciones obtenida correctamente', result, 200);
+            res.status(200).json(response);
+        }catch(error:any){
+            const response = new ResponseDto(false, error?.message || 'Error al obtener visión general de intenciones', null, 500);
+            res.status(500).json(response);
+        }
+    }
+
     listCharacters = async(req: Request, res: Response):Promise<void>=>{
         try{
             const search = (res.locals as any).characterSearch || req.query;

@@ -102,6 +102,93 @@ export class ParametersRepository{
         return { requirements, total };
     }
 
+    async overviewIntentions():Promise<any>{
+        // Obtener todas las intenciones necesarias para construir el árbol
+        const intentions = await this.db.intention.findMany({
+            select: {
+                id: true,
+                code: true,
+                flow_name: true,
+                description: true,
+                ai_instructions: true,
+                priority: true,
+                type: true,
+            },
+            orderBy: [
+                { type: 'asc' },
+                { flow_name: 'asc' },
+                { code: 'asc' }
+            ]
+        });
+
+        // Tipos a retornar SIEMPRE, aunque no exista data
+        const TYPE_NODES = [
+            { key: 'sales', label: 'Ventas' },
+            { key: 'support', label: 'Soporte' },
+            { key: 'onboarding', label: 'Onboarding' },
+            { key: 'follow_up', label: 'Seguimiento' },
+        ] as const;
+
+        // Agrupar por type y flow_name en memoria
+        const byType: Record<string, any[]> = {};
+        for (const it of intentions){
+            const t = it.type as unknown as string;
+            if(!byType[t]) byType[t] = [];
+            byType[t].push(it);
+        }
+
+        const result = TYPE_NODES.map((typeDef)=>{
+            const items = byType[typeDef.key] ?? [];
+
+            // Agrupar por flow_name
+            const byFlow: Record<string, typeof items> = {};
+            for(const it of items){
+                const flow = it.flow_name;
+                if(!byFlow[flow]) byFlow[flow] = [] as any;
+                byFlow[flow].push(it);
+            }
+
+            const flowNodes = Object.keys(byFlow).sort().map((flow)=>{
+                const flowIntentions = byFlow[flow];
+                const intentionNodes = flowIntentions.map((i)=>({
+                    id: `intention:${i.id}`,
+                    label: i.code,
+                    isLeaf: true,
+                    disabled: false,
+                    // children: [],
+                    meta: {
+                        id: i.id,
+                        code: i.code,
+                        flow_name: i.flow_name,
+                        description: i.description,
+                        ai_instructions: i.ai_instructions,
+                        priority: i.priority,
+                        type: i.type,
+                    }
+                }));
+                return {
+                    id: `type:${typeDef.key}|flow:${flow}`,
+                    label: flow,
+                    isLeaf: false,
+                    disabled: false,
+                    children: intentionNodes,
+                    meta: { key: 'flow_name', enum: flow, total: intentionNodes.length }
+                };
+            });
+
+            return {
+                id: `type:${typeDef.key}`,
+                label: typeDef.label,
+                isLeaf: false,
+                disabled: false,
+                children: flowNodes,
+                meta: { key: 'type', enum: typeDef.key, total: items.length }
+            };
+        });
+
+        return result;
+    }
+
     async updateIntention(intention_id:number, data: Partial<createIntentionInterface>):Promise<Intention>{
         return await this.db.intention.update({ where: { id: intention_id }, data });
     }
