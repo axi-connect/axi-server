@@ -172,7 +172,7 @@ export class ParametersRepository{
                     isLeaf: false,
                     disabled: false,
                     children: intentionNodes,
-                    meta: { key: 'flow_name', enum: flow, total: intentionNodes.length }
+                    meta: { key: 'flow_name', enum: flow, count: intentionNodes.length }
                 };
             });
 
@@ -182,7 +182,7 @@ export class ParametersRepository{
                 isLeaf: false,
                 disabled: false,
                 children: flowNodes,
-                meta: { key: 'type', enum: typeDef.key, total: items.length }
+                meta: { key: 'type', enum: typeDef.key, count: items.length }
             };
         });
 

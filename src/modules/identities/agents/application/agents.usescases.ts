@@ -3,7 +3,7 @@ import { Agent } from "@prisma/client";
 import { HttpError } from "@/shared/errors/http.error.js";
 import { AgentsRepository } from "../infrastructure/agents.repository.js";
 import { ParametersRepository } from "@/modules/parameters/infrastructure/parameters.repository.js";
-import { CreateAgentInput, UpdateAgentInput, AgentSearchInterface, CreateAgentPayload } from "../domain/repository.interface.js";
+import { CreateAgentInput, UpdateAgentInput, AgentSearchInterface, CreateAgentPayload, AgentDetailDTO } from "../domain/repository.interface.js";
 import { CompaniesRepository } from "@/modules/identities/companies/infrastructure/companies.repository.js";
 
 export class AgentsUseCases{
@@ -60,18 +60,13 @@ export class AgentsUseCases{
         return await this.agentsRepository.createAgent(createInput);
     }
 
-    async list(agent_id?:number):Promise<Agent[]>{
+    async list(agent_id?:number):Promise<AgentDetailDTO[]>{
         return await this.agentsRepository.getAgent(agent_id);
     }
 
     async search(search?:AgentSearchInterface):Promise<{agents:any[], total:number}>{
-        const mode = search?.view === 'detail' ? 'detail' : 'summary';
-        if(mode === 'detail') return await (this.agentsRepository as any).findAgentsDetail(search);
-        return await (this.agentsRepository as any).findAgentsSummary(search);
-    }
-
-    async getByClientId(client_id:string):Promise<Agent[]>{
-        return await this.agentsRepository.getAgent(client_id, 'client_id');
+        if(search?.view === 'detail') return await this.agentsRepository.findAgentsDetail(search);
+        return await this.agentsRepository.findAgentsSummary(search);
     }
 
     async update(agent_id:number, agent_data:UpdateAgentInput):Promise<Agent>{

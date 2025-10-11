@@ -6,7 +6,7 @@ import { conversation, sendMessageClient } from "../../domain/conversation.inter
 import { CatalogRepository } from '../../../../catalog/infrastructure/catalog.repository.js';
 import { ParametersUsesCases } from '../../../../parameters/application/parameters.usescases.js';
 import { ParametersRepository } from '../../../../parameters/infrastructure/parameters.repository.js';
-import { AgentWithRelations as agentDependency, AgentIntentionDependency as agentIntentionDependency } from "../../../../agents/domain/repository.interface.js";
+import { AgentDetailDTO as agentDependency, AgentIntentionDependency as agentIntentionDependency } from "@/modules/identities/agents/domain/repository.interface.js";
 import { Company } from '@prisma/client';
 
 const getArgumentFlow = async(
@@ -14,7 +14,8 @@ const getArgumentFlow = async(
     argumentFlowInit:{history:string, conversation:conversation, sendMessage:sendMessageClient, company:Company, instructions:null}
 ):Promise<paramsFlow>=>{
     const argumentFlow:paramsFlow = argumentFlowInit;
-    const {ai_requirement, require_reminder, require_catalog, require_schedule, require_db, require_sheet} = intention;
+    const {ai_requirement, requirements} = intention;
+    const {require_reminder, require_catalog, require_schedule, require_db, require_sheet} = requirements as any;
 
     if (Array.isArray(ai_requirement.instructions)){
         const instructions_string = (ai_requirement.instructions as string[]).reduce((acumulador: string, instruction: string) => acumulador + `- ${instruction}\n`, '');

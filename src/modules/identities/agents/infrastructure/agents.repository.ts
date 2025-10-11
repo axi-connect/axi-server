@@ -1,6 +1,6 @@
 import { PrismaClient, Agent, AgentStatus } from "@prisma/client";
 import { normalizeTextValue } from "@/shared/utils/utils.shared.js";
-import { AgentsRepositoryInterface, AgentWithRelations, CreateAgentInput, UpdateAgentInput, AgentSearchInterface, AgentSummaryDTO, AgentDetailDTO } from "../domain/repository.interface.js";
+import { AgentsRepositoryInterface, CreateAgentInput, UpdateAgentInput, AgentSearchInterface, AgentSummaryDTO, AgentDetailDTO } from "../domain/repository.interface.js";
 
 export class AgentsRepository implements AgentsRepositoryInterface{
     private db:PrismaClient;
@@ -21,11 +21,12 @@ export class AgentsRepository implements AgentsRepositoryInterface{
         })
     }
 
-    async getAgent(value?:any, column:string='id'):Promise<AgentWithRelations[]>{
+    async getAgent(value?:any, column:string='id'):Promise<AgentDetailDTO[]>{
         return await this.db.agent.findMany({
             where: value ? {[column]: value} : undefined,
             include: {
                 company: true,
+                character: true,
                 agentIntention: {
                     include: {
                         intention: true,
@@ -33,7 +34,7 @@ export class AgentsRepository implements AgentsRepositoryInterface{
                     }
                 }
             }
-        }) as unknown as AgentWithRelations[];
+        }) as unknown as AgentDetailDTO[];
     }
 
     async findAgentsSummary(search:AgentSearchInterface = {}):Promise<{agents: AgentSummaryDTO[], total:number}>{
@@ -49,7 +50,11 @@ export class AgentsRepository implements AgentsRepositoryInterface{
         const [agents, total] = await this.db.$transaction([
             this.db.agent.findMany({
                 where,
-                select: { id:true, name:true, phone:true, alive:true, company_id:true },
+                select: {
+                    id:true, name:true, phone:true, alive:true,
+                    company: { select: { id:true, name:true } },
+                    character: { select: { id:true, avatar_url:true, style:true } },
+                },
                 skip: search.offset ?? 0,
                 take: search.limit ?? 20,
                 orderBy: { [sortBy]: sortDir }
@@ -72,7 +77,7 @@ export class AgentsRepository implements AgentsRepositoryInterface{
         const [agents, total] = await this.db.$transaction([
             this.db.agent.findMany({
                 where,
-                include: { company: true, agentIntention: { include: { intention:true, ai_requirement:true } } },
+                include: { company: true, character: true, agentIntention: { include: { intention:true, ai_requirement:true } } },
                 skip: search.offset ?? 0,
                 take: search.limit ?? 20,
                 orderBy: { [sortBy]: sortDir }
@@ -84,8 +89,8 @@ export class AgentsRepository implements AgentsRepositoryInterface{
             name: a.name,
             phone: a.phone,
             alive: a.alive,
-            company_id: a.company_id,
             client_id: a.client_id,
+            character: a.character,
             company: {id: a.company.id, name: a.company.name},
             agentIntention: a.agentIntention
         })) as AgentDetailDTO[];

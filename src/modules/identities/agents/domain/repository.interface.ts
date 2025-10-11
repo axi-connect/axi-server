@@ -5,11 +5,6 @@ export interface AgentIntentionDependency extends AgentIntention{
     ai_requirement: AIRequirement
 }
 
-export interface AgentWithRelations extends Agent{
-    company: Company,
-    agentIntention: AgentIntentionDependency[]
-}
-
 export interface CreateAgentIntentionInput{
     intention_id: number,
     require_catalog: boolean,
@@ -68,10 +63,10 @@ export interface UpdateAgentInput{
 }
 
 export interface AgentsRepositoryInterface{
-    getAgent(value?:any, column?:string):Promise<AgentWithRelations[]>
-    createAgent(agent_data:CreateAgentInput):Promise<Agent>
-    updateAgent(agent_id:number, agent_data:UpdateAgentInput):Promise<Agent>
     deleteAgent(agent_id:number):Promise<Agent>
+    createAgent(agent_data:CreateAgentInput):Promise<Agent>
+    getAgent(value?:any, column?:string):Promise<AgentDetailDTO[]>
+    updateAgent(agent_id:number, agent_data:UpdateAgentInput):Promise<Agent>
 }
 
 export type AgentsViewMode = 'summary' | 'detail';
@@ -93,11 +88,12 @@ export interface AgentSummaryDTO{
     name:string;
     phone:string;
     alive:boolean;
-    company_id:number;
+    company:{ id:number, name:string };
+    character?: { id:number, url:string | null, style:any } | null;
 }
 
 export interface AgentDetailDTO extends AgentSummaryDTO{
     client_id:string;
-    company: {id:number, name:string};
+    company: Company;
     agentIntention: AgentIntentionDependency[];
 }
