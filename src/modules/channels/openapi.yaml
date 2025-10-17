@@ -1,0 +1,931 @@
+openapi: 3.0.3
+info:
+  title: Axi Connect - Channels Module API
+  description: API for managing communication channels, conversations, and messages in Axi Connect
+  version: 1.0.0
+  contact:
+    name: Axi Connect Team
+    email: support@axi-connect.com
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://api.axi-connect.com
+    description: Production server
+
+security:
+  - bearerAuth: []
+
+paths:
+  # CHANNELS ENDPOINTS
+  /channels:
+    post:
+      tags:
+        - Channels
+      summary: Create a new communication channel
+      description: Creates a new communication channel (WhatsApp, SMS, Email, etc.) with its credentials
+      operationId: createChannel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChannelRequest'
+            example:
+              name: "WhatsApp Business Principal"
+              type: "WHATSAPP"
+              provider: "META"
+              provider_account: "573001234567"
+              credentials:
+                accessToken: "EAAKb8xYZ..."
+                phoneNumberId: "123456789"
+                appId: "987654321"
+              config:
+                webhookUrl: "https://miapp.com/webhooks/whatsapp"
+                timeout: 5000
+              company_id: 1
+      responses:
+        '201':
+          description: Channel created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelResponse'
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Channel with this provider account already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags:
+        - Channels
+      summary: List channels for company
+      description: Retrieves a paginated list of communication channels for the authenticated company
+      operationId: listChannels
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+          description: Filter by channel name (partial match)
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/ChannelType'
+          description: Filter by channel type
+        - name: provider
+          in: query
+          schema:
+            $ref: '#/components/schemas/ChannelProvider'
+          description: Filter by provider
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of results per page
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of results to skip
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [created_at, updated_at, name]
+            default: created_at
+          description: Sort field
+        - name: sortDir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          description: Sort direction
+      responses:
+        '200':
+          description: Channels retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelsListResponse'
+
+  /channels/{id}:
+    get:
+      tags:
+        - Channels
+      summary: Get channel by ID
+      description: Retrieves detailed information about a specific communication channel
+      operationId: getChannel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Channel unique identifier
+      responses:
+        '200':
+          description: Channel retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelResponse'
+        '404':
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Channels
+      summary: Update channel
+      description: Updates an existing communication channel's information
+      operationId: updateChannel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Channel unique identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateChannelRequest'
+      responses:
+        '200':
+          description: Channel updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelResponse'
+        '404':
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - Channels
+      summary: Delete channel (soft delete)
+      description: Soft deletes a communication channel (marks as deleted)
+      operationId: deleteChannel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Channel unique identifier
+      responses:
+        '200':
+          description: Channel deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /channels/{id}/activate:
+    put:
+      tags:
+        - Channels
+      summary: Activate channel
+      description: Activates a previously deactivated communication channel
+      operationId: activateChannel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Channel unique identifier
+      responses:
+        '200':
+          description: Channel activated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelResponse'
+        '404':
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /channels/{id}/deactivate:
+    put:
+      tags:
+        - Channels
+      summary: Deactivate channel
+      description: Deactivates a communication channel without deleting it
+      operationId: deactivateChannel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Channel unique identifier
+      responses:
+        '200':
+          description: Channel deactivated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelResponse'
+        '404':
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # CONVERSATIONS ENDPOINTS
+  /channels/conversations:
+    post:
+      tags:
+        - Conversations
+      summary: Create a new conversation
+      description: Creates a new conversation for a specific channel
+      operationId: createConversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+      responses:
+        '201':
+          description: Conversation created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponse'
+
+  /channels/conversations/{id}:
+    get:
+      tags:
+        - Conversations
+      summary: Get conversation by ID
+      description: Retrieves detailed information about a specific conversation
+      operationId: getConversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Conversation unique identifier
+      responses:
+        '200':
+          description: Conversation retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponse'
+
+    put:
+      tags:
+        - Conversations
+      summary: Update conversation
+      description: Updates conversation information including status and metadata
+      operationId: updateConversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Conversation unique identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateConversationRequest'
+      responses:
+        '200':
+          description: Conversation updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponse'
+
+  /channels/conversations/{id}/assign-agent:
+    put:
+      tags:
+        - Conversations
+      summary: Assign agent to conversation
+      description: Assigns a specific agent to handle the conversation
+      operationId: assignAgent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Conversation unique identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - agent_id
+              properties:
+                agent_id:
+                  type: integer
+                  description: Agent ID to assign
+                  example: 123
+      responses:
+        '200':
+          description: Agent assigned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponse'
+
+  /channels/conversations/{id}/unassign-agent:
+    put:
+      tags:
+        - Conversations
+      summary: Unassign agent from conversation
+      description: Removes the assigned agent from the conversation
+      operationId: unassignAgent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Conversation unique identifier
+      responses:
+        '200':
+          description: Agent unassigned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponse'
+
+  /channels/conversations/{conversationId}/messages:
+    get:
+      tags:
+        - Conversations
+      summary: Get messages by conversation
+      description: Retrieves all messages for a specific conversation
+      operationId: getMessagesByConversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Conversation unique identifier
+      responses:
+        '200':
+          description: Messages retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MessageResponse'
+
+  # MESSAGES ENDPOINTS
+  /channels/messages:
+    post:
+      tags:
+        - Messages
+      summary: Send a new message
+      description: Sends a new message through a communication channel
+      operationId: sendMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMessageRequest'
+      responses:
+        '201':
+          description: Message sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+
+  /channels/messages/{id}:
+    get:
+      tags:
+        - Messages
+      summary: Get message by ID
+      description: Retrieves detailed information about a specific message
+      operationId: getMessage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Message unique identifier
+      responses:
+        '200':
+          description: Message retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+
+  /channels/messages/{id}/status:
+    put:
+      tags:
+        - Messages
+      summary: Update message status
+      description: Updates the delivery/read status of a message
+      operationId: updateMessageStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Message unique identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  $ref: '#/components/schemas/MessageStatus'
+      responses:
+        '200':
+          description: Message status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # ENUMS
+    ChannelType:
+      type: string
+      enum: [CALL, EMAIL, WHATSAPP, TELEGRAM, INSTAGRAM, MESSENGER]
+      description: Type of communication channel
+
+    ChannelProvider:
+      type: string
+      enum: [META, TWILIO, CUSTOM]
+      description: Provider of the communication channel
+
+    MessageDirection:
+      type: string
+      enum: [incoming, outgoing]
+      description: Direction of the message
+
+    MessageStatus:
+      type: string
+      enum: [PENDING, SENT, DELIVERED, READ, FAILED, RECEIVED]
+      description: Delivery status of the message
+
+    ParticipantType:
+      type: string
+      enum: [agent, lead, client, prospect, customer, system]
+      description: Type of conversation participant
+
+    # REQUEST SCHEMAS
+    CreateChannelRequest:
+      type: object
+      required:
+        - name
+        - type
+        - provider
+        - provider_account
+        - credentials
+        - company_id
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Display name for the channel
+        type:
+          $ref: '#/components/schemas/ChannelType'
+        provider:
+          $ref: '#/components/schemas/ChannelProvider'
+        provider_account:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Account identifier from the provider (phone number, email, etc.)
+        credentials:
+          type: object
+          description: Provider-specific authentication credentials
+          oneOf:
+            - $ref: '#/components/schemas/MetaCredentials'
+            - $ref: '#/components/schemas/TwilioCredentials'
+            - $ref: '#/components/schemas/CustomCredentials'
+        config:
+          $ref: '#/components/schemas/ChannelConfig'
+        default_agent_id:
+          type: integer
+          description: Default agent ID for incoming messages
+        company_id:
+          type: integer
+          description: Company that owns this channel
+        expires_at:
+          type: string
+          format: date-time
+          description: Optional expiration date for credentials
+
+    UpdateChannelRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        type:
+          $ref: '#/components/schemas/ChannelType'
+        provider:
+          $ref: '#/components/schemas/ChannelProvider'
+        provider_account:
+          type: string
+          minLength: 1
+          maxLength: 255
+        config:
+          $ref: '#/components/schemas/ChannelConfig'
+        is_active:
+          type: boolean
+        default_agent_id:
+          type: integer
+
+    CreateConversationRequest:
+      type: object
+      required:
+        - company_id
+        - channel_id
+        - external_id
+        - participant_type
+      properties:
+        company_id:
+          type: integer
+        channel_id:
+          type: string
+          format: uuid
+        external_id:
+          type: string
+          description: External conversation ID from provider
+        participant_id:
+          type: string
+          description: Participant identifier (phone, email, etc.)
+        participant_meta:
+          type: object
+          description: Additional participant metadata
+        participant_type:
+          $ref: '#/components/schemas/ParticipantType'
+
+    UpdateConversationRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Conversation status (open, closed, etc.)
+        assigned_agent_id:
+          type: integer
+        participant_meta:
+          type: object
+
+    CreateMessageRequest:
+      type: object
+      required:
+        - direction
+        - conversation_id
+        - content_type
+        - message
+      properties:
+        from:
+          type: string
+          description: Sender identifier
+        to:
+          type: string
+          description: Receiver identifier
+        message:
+          type: string
+          description: Message content
+        payload:
+          type: object
+          description: Additional message payload
+        metadata:
+          type: object
+          description: Message metadata
+        direction:
+          $ref: '#/components/schemas/MessageDirection'
+        conversation_id:
+          type: string
+          format: uuid
+          description: Conversation this message belongs to
+        content_type:
+          type: string
+          description: Content type (text, template, image, etc.)
+
+    # RESPONSE SCHEMAS
+    ChannelResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/ChannelType'
+        config:
+          $ref: '#/components/schemas/ChannelConfig'
+        provider:
+          $ref: '#/components/schemas/ChannelProvider'
+        is_active:
+          type: boolean
+        provider_account:
+          type: string
+        default_agent_id:
+          type: integer
+          nullable: true
+        company_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ChannelsListResponse:
+      type: object
+      properties:
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChannelResponse'
+        total:
+          type: integer
+          description: Total number of channels
+        limit:
+          type: integer
+          description: Items per page
+        offset:
+          type: integer
+          description: Items skipped
+
+    ConversationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        company_id:
+          type: integer
+        channel_id:
+          type: string
+          format: uuid
+        external_id:
+          type: string
+        assigned_agent_id:
+          type: integer
+          nullable: true
+        participant_id:
+          type: string
+          nullable: true
+        participant_meta:
+          type: object
+          nullable: true
+        participant_type:
+          $ref: '#/components/schemas/ParticipantType'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_message_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    MessageResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        from:
+          type: string
+          nullable: true
+        to:
+          type: string
+          nullable: true
+        message:
+          type: string
+        payload:
+          type: object
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+        direction:
+          $ref: '#/components/schemas/MessageDirection'
+        timestamp:
+          type: string
+          format: date-time
+        conversation_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/MessageStatus'
+        content_type:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # CREDENTIAL SCHEMAS
+    MetaCredentials:
+      type: object
+      required:
+        - accessToken
+        - phoneNumberId
+      properties:
+        accessToken:
+          type: string
+          description: WhatsApp Business API access token
+        phoneNumberId:
+          type: string
+          description: WhatsApp phone number ID
+        appId:
+          type: string
+          description: Facebook App ID
+        appSecret:
+          type: string
+          description: Facebook App Secret
+        webhookVerifyToken:
+          type: string
+          description: Webhook verification token
+
+    TwilioCredentials:
+      type: object
+      required:
+        - accountSid
+        - authToken
+      properties:
+        accountSid:
+          type: string
+          description: Twilio Account SID
+        authToken:
+          type: string
+          description: Twilio Auth Token
+        phoneNumber:
+          type: string
+          description: Twilio phone number
+
+    CustomCredentials:
+      type: object
+      description: Custom provider credentials (flexible structure)
+      additionalProperties: true
+
+    # CONFIG SCHEMAS
+    ChannelConfig:
+      type: object
+      properties:
+        webhookUrl:
+          type: string
+          format: uri
+          description: Webhook URL for receiving messages
+        phoneNumberId:
+          type: string
+          description: Provider-specific phone number ID
+        accountSid:
+          type: string
+          description: Provider account SID
+        apiKey:
+          type: string
+          description: API key for authentication
+        apiSecret:
+          type: string
+          description: API secret for authentication
+        timeout:
+          type: integer
+          minimum: 1000
+          maximum: 30000
+          description: Request timeout in milliseconds
+        retries:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: Number of retry attempts
+        rateLimit:
+          type: object
+          properties:
+            requests:
+              type: integer
+              minimum: 1
+              description: Number of requests allowed
+            period:
+              type: integer
+              minimum: 1
+              description: Time period in seconds
+
+    # COMMON SCHEMAS
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
+        data:
+          type: object
+          nullable: true
+        statusCode:
+          type: integer
+          example: 200
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Validation error"
+        data:
+          type: object
+          nullable: true
+        statusCode:
+          type: integer
+          example: 400
