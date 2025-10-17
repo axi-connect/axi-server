@@ -1,0 +1,39 @@
+import { ChannelType, ChannelProvider } from '@prisma/client';
+
+export interface ChannelEntity {
+  id: string;
+  name: string;
+  type: ChannelType;
+  config?: any;
+  provider: ChannelProvider;
+  is_active: boolean;
+  credentials_id: string;
+  provider_account: string;
+  default_agent_id?: number;
+  company_id: number;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at?: Date;
+}
+
+export interface CreateChannelData {
+  name: string;
+  type: ChannelType;
+  config?: any;
+  provider: ChannelProvider;
+  credentials_id: string;
+  provider_account: string;
+  default_agent_id?: number;
+  company_id: number;
+}
+
+export interface UpdateChannelData {
+  name?: string;
+  type?: ChannelType;
+  config?: any;
+  provider?: ChannelProvider;
+  is_active?: boolean;
+  credentials_id?: string;
+  provider_account?: string;
+  default_agent_id?: number;
+}

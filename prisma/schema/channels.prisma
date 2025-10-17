@@ -1,83 +1,8 @@
-model Agent {
-  id             Int              @id @default(autoincrement())
-  name           String
-  phone          String           @unique
-  alive          Boolean          @default(true)
-  channel        ChannelType
-  client_id      String
-  company_id     Int
-  character_id   Int?
-  skills         String[]
-  status         AgentStatus
-  messages       MessageLog[]
-  conversations  Conversation[]
-  agentIntention AgentIntention[]
-  character      AgentCharacter?  @relation(fields: [character_id], references: [id])
-  company        Company          @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+enum ChannelProvider {
+  META // Meta/WhatsApp Cloud API
+  TWILIO
+  CUSTOM
 
-  @@map("agent")
-  @@schema("channels")
-}
-
-enum ChannelType {
-  whatsapp
-  email
-  call
-  instagram
-  facebook
-  telegram
-
-  @@schema("channels")
-}
-
-enum MessageDirection {
-  incoming
-  outgoing
-
-  @@schema("channels")
-}
-
-model MessageLog {
-  id               Int              @id @default(autoincrement())
-  conversationId   Int
-  agentId          Int?
-  channel          ChannelType
-  direction        MessageDirection
-  message          String
-  timestamp        DateTime         @default(now())
-  metadata         Json?
-  participant_type ParticipantType
-  participant_id   Int?
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  agent        Agent?       @relation(fields: [agentId], references: [id])
-
-  @@index([conversationId, timestamp], map: "idx_message_conversation_ts")
-  @@index([timestamp], map: "idx_message_timestamp")
-  @@map("message_log")
-  @@schema("channels")
-}
-
-model Conversation {
-  id              Int         @id @default(autoincrement())
-  company_id      Int
-  channel         ChannelType
-  agentId         Int?
-  client_id       Int?
-  lead_id         Int?
-  created_at      DateTime    @default(now())
-  updated_at      DateTime    @updatedAt
-  last_message_at DateTime?
-
-  company  Company      @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  agent    Agent?       @relation(fields: [agentId], references: [id])
-  client   Client?      @relation(fields: [client_id], references: [id])
-  lead     Lead?        @relation(fields: [lead_id], references: [id])
-  messages MessageLog[]
-
-  @@index([company_id], map: "idx_conversation_company")
-  @@index([channel], map: "idx_conversation_channel")
-  @@map("conversation")
   @@schema("channels")
 }
 
@@ -93,11 +18,182 @@ enum AgentStatus {
   @@schema("channels")
 }
 
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  RECEIVED // received on our side
+
+  @@schema("channels")
+}
+
+enum ChannelType {
+  CALL
+  EMAIL
+  WHATSAPP
+  TELEGRAM
+  INSTAGRAM
+  MESSENGER
+
+  @@schema("channels")
+}
+
 enum ParticipantType {
   agent
-  client
   lead
-  bot
+  client
+  prospect
+  customer
+  system
 
+  @@schema("channels")
+}
+
+enum MessageDirection {
+  incoming
+  outgoing
+
+  @@schema("channels")
+}
+
+model Agent {
+  id             Int              @id @default(autoincrement())
+  name           String
+  phone          String           @unique
+  alive          Boolean          @default(true)
+  channel        ChannelType
+  client_id      String
+  company_id     Int
+  character_id   Int?
+  skills         String[]
+  status         AgentStatus
+  conversations  Conversation[]
+  agentIntention AgentIntention[]
+  character      AgentCharacter?  @relation(fields: [character_id], references: [id])
+  company        Company          @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @default(now()) @updatedAt
+
+  @@index([phone], map: "idx_agent_phone")
+  @@index([status], map: "idx_agent_status")
+  @@index([skills], map: "idx_agent_skills")
+  @@index([channel], map: "idx_agent_channel")
+  @@index([company_id], map: "idx_agent_company")
+  @@index([character_id], map: "idx_agent_character")
+  @@index([company_id, channel], map: "idx_agent_company_channel")
+  @@map("agent")
+  @@schema("channels")
+}
+
+model MessageLog {
+  id              String              @id @default(uuid())
+  from            String? // sender id (phone etc.)
+  to              String? // receiver id
+  message         String // message body
+  payload         Json? // provider-specific payload (media links, template params)
+  metadata        Json? // message metadata
+  direction       MessageDirection // incoming | outgoing
+  timestamp       DateTime            @default(now()) // message timestamp
+  conversation_id String // FK to Conversation
+  status          MessageStatus       @default(PENDING) // PENDING | SENT | DELIVERED | READ | FAILED | RECEIVED
+  content_type    String // text | template | image | audio | interactive | etc.
+  created_at      DateTime            @default(now())
+  updated_at      DateTime            @updatedAt
+  attachments     MessageAttachment[]
+  conversation    Conversation        @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([direction, status])
+  @@index([timestamp], map: "idx_message_timestamp")
+  @@index([conversation_id, timestamp], map: "idx_message_conversation_ts")
+  @@map("message_log")
+  @@schema("channels")
+}
+
+model Conversation {
+  id                String          @id @default(uuid())
+  status            String          @default("open") // open/closed
+  company_id        Int // FK to Company
+  channel_id        String // FK to Channel
+  external_id       String          @unique // external conversation id from provider (wa session id, etc.)
+  assigned_agent_id Int? // current assigned agent
+  participant_id    String? // phone or user id on the channel (e.g. customer phone number)
+  participant_meta  Json? // any metadata (profile name, locale)
+  participant_type  ParticipantType // agent | lead | client | prospect | customer | system
+  created_at        DateTime        @default(now()) // date of creation
+  updated_at        DateTime        @updatedAt // date of last update
+  last_message_at   DateTime? // date of last message
+  assigned_agent    Agent?          @relation(fields: [assigned_agent_id], references: [id])
+  channel           Channel         @relation(fields: [channel_id], references: [id], onDelete: Cascade)
+  company           Company         @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  messages          MessageLog[]
+  // client             Client?            @relation(fields: [client_id], references: [id])
+  // lead               Lead?              @relation(fields: [lead_id], references: [id])
+
+  @@index([channel_id, external_id])
+  @@index([company_id], map: "idx_conversation_company")
+  @@index([channel_id], map: "idx_conversation_channel")
+  @@index([participant_id], map: "idx_conversation_participant")
+  @@map("conversation")
+  @@schema("channels")
+}
+
+model Channel {
+  id               String            @id @default(uuid())
+  name             String // Nombre asignado a el canal | nombre de usuario | nombre de la empresa
+  type             ChannelType // Tipo de canal | whatsapp | telegram | instagram | messenger | email | call
+  config           Json? // provider specific config (webhook paths, phoneNumberId, etc.)
+  provider         ChannelProvider // Proveedor de canal | meta | twilio | custom
+  is_active        Boolean           @default(true) // Estado del canal | true | false
+  credentials_id   String            @unique // FK to ChannelCredential
+  provider_account String            @unique // Numero de telefono | ID de la empresa de meta
+  default_agent_id Int? // optional default agent for incoming messages
+  company_id       Int
+  company          Company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  credentials      ChannelCredential @relation(fields: [credentials_id], references: [id])
+  conversations    Conversation[]
+  created_at       DateTime          @default(now())
+  updated_at       DateTime          @updatedAt
+  deleted_at       DateTime? // soft delete
+  // templates         Template[]
+  // webhooks          WebhookLog[]
+
+  @@index([company_id, type])
+  @@index([provider, provider_account])
+  @@map("channel")
+  @@schema("channels")
+}
+
+model MessageAttachment {
+  id         String     @id @default(uuid())
+  message_id String
+  filename   String
+  mime_type  String
+  size       Int
+  url        String? // URL to access the file
+  local_path String? // Local path if stored locally
+  message    MessageLog @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  created_at DateTime   @default(now())
+
+  @@index([message_id])
+  @@map("message_attachment")
+  @@schema("channels")
+}
+
+model ChannelCredential {
+  id          String          @id @default(uuid())
+  channel_id  String
+  provider    ChannelProvider
+  credentials Json // Encrypted credentials (API keys, tokens, secrets)
+  is_active   Boolean         @default(true)
+  expires_at  DateTime?
+  channel     Channel?
+  created_at  DateTime        @default(now())
+  updated_at  DateTime        @updatedAt
+
+  @@index([channel_id])
+  @@index([provider])
+  @@map("channel_credential")
   @@schema("channels")
 }

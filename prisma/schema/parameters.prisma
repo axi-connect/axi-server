@@ -56,10 +56,10 @@ model AgentIntention {
 
 model AgentCharacter {
   id         Int     @id @default(autoincrement())
-  avatar_url String?  // imagen principal del avatar
-  style      Json?    // colores, tipografía, estilo del bubble chat, etc.
-  voice      Json?    // configuración de voz: género, tono, velocidad, idioma
-  resources  Json?    // extra: animaciones, imágenes adicionales, stickers, etc.
+  avatar_url String? // imagen principal del avatar
+  style      Json? // colores, tipografía, estilo del bubble chat, etc.
+  voice      Json? // configuración de voz: género, tono, velocidad, idioma
+  resources  Json? // extra: animaciones, imágenes adicionales, stickers, etc.
   Agent      Agent[]
 
   @@map("agent_character")

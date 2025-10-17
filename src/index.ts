@@ -10,9 +10,9 @@ import { RbacRouter } from "./modules/rbac/infrastructure/rbac.routes.js";
 import { AuthRouter } from "./modules/auth/infrastructure/auth.routes.js";
 import { LeadsRouter } from "./modules/leads/infrastructure/leads.routes.js";
 import { CatalogRouter } from "./modules/catalog/infrastructure/catalog.routes.js";
+import { ChannelsRouter } from "./modules/channels/infrastructure/routes/main.routes.js";
 import { ParametersRouter } from "./modules/parameters/infrastructure/parameters.routes.js";
 import { IdentitiesRouter } from "./modules/identities/infrastructure/identities.routes.js";
-import { WhatsappRoutes } from "./modules/channels/whatsapp/infrastructure/whatsapp.routes.js";
 
 const app:Application = express();
 const PORT = process.env.PORT || 3000;
@@ -36,7 +36,7 @@ app.use('/catalog', CatalogRouter);
 app.use('/identities', IdentitiesRouter);
 app.use('/parameters', ParametersRouter);
 // Channels
-app.use('/whatsapp', WhatsappRoutes);
+app.use('/channels', ChannelsRouter);
 
 // Boot Server
 app.listen(PORT, () => {
