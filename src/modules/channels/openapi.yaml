@@ -277,6 +277,82 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /channels/{id}/qr:
+    get:
+      tags:
+        - Authentication
+      summary: Get QR code for channel authentication
+      description: Generates or retrieves a QR code for authenticating channels that require manual login (e.g., WhatsApp Web)
+      operationId: getChannelQR
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Channel unique identifier
+      responses:
+        '200':
+          description: QR code generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QRCodeResponse'
+        '400':
+          description: Channel is already active or QR auth not supported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /channels/{id}/auth:
+    post:
+      tags:
+        - Authentication
+      summary: Complete channel authentication
+      description: Completes the authentication process for a channel using a session ID
+      operationId: completeChannelAuth
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Channel unique identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteAuthRequest'
+      responses:
+        '200':
+          description: Channel authentication completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelResponse'
+        '400':
+          description: Invalid session or authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   # CONVERSATIONS ENDPOINTS
   /channels/conversations:
     post:
@@ -586,7 +662,7 @@ components:
           description: Default agent ID for incoming messages
         company_id:
           type: integer
-          description: Company that owns this channel
+          description: Company that owns this channel (must exist)
         expires_at:
           type: string
           format: date-time
@@ -896,6 +972,47 @@ components:
               type: integer
               minimum: 1
               description: Time period in seconds
+
+    # AUTHENTICATION SCHEMAS
+    QRCodeResponse:
+      type: object
+      properties:
+        qrCode:
+          type: string
+          description: QR code string for authentication
+          example: "whatsapp-auth-uuid-1234567890"
+        qrCodeUrl:
+          type: string
+          format: uri
+          description: URL to access the QR code image
+          example: "/api/channels/uuid/qr-image/uuid"
+        sessionId:
+          type: string
+          format: uuid
+          description: Authentication session ID
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        expiresAt:
+          type: string
+          format: date-time
+          description: Session expiration timestamp
+          example: "2024-01-15T11:00:00Z"
+
+    CompleteAuthRequest:
+      type: object
+      required:
+        - sessionId
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: Authentication session ID obtained from QR endpoint
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        metadata:
+          type: object
+          description: Additional authentication metadata
+          example:
+            phoneNumber: "+573001234567"
+            authenticated: true
 
     # COMMON SCHEMAS
     SuccessResponse:

@@ -12,14 +12,7 @@ export class ChannelController {
       const body: CreateChannelRequestDto = req.body;
 
       const input: CreateChannelInput = {
-        name: body.name,
-        type: body.type,
-        provider: body.provider,
-        provider_account: body.provider_account,
-        credentials: body.credentials,
-        config: body.config,
-        default_agent_id: body.default_agent_id,
-        company_id: body.company_id,
+        ...body,
         expires_at: body.expires_at ? new Date(body.expires_at) : undefined
       };
 
@@ -235,6 +228,60 @@ export class ChannelController {
       };
 
       const responseDto = new ResponseDto(true, 'Channel deactivated successfully', response, 200);
+      res.status(200).json(responseDto);
+    } catch (error: any) {
+      const statusCode = error instanceof HttpError ? error.statusCode : 500;
+      const responseDto = new ResponseDto(false, error.message || 'Internal server error', null, statusCode);
+      res.status(statusCode).json(responseDto);
+    }
+  };
+
+  getChannelQR = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const qrData = await this.channelUseCases.getChannelQR(id);
+
+      const responseDto = new ResponseDto(true, 'QR code generated successfully', {
+        qrCode: qrData.qrCode,
+        qrCodeUrl: qrData.qrCodeUrl,
+        sessionId: qrData.sessionId,
+        expiresAt: qrData.expiresAt.toISOString()
+      }, 200);
+      res.status(200).json(responseDto);
+    } catch (error: any) {
+      const statusCode = error instanceof HttpError ? error.statusCode : 500;
+      const responseDto = new ResponseDto(false, error.message || 'Internal server error', null, statusCode);
+      res.status(statusCode).json(responseDto);
+    }
+  };
+
+  completeChannelAuth = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const { sessionId, metadata } = req.body;
+
+      if (!sessionId) {
+        throw new HttpError(400, 'Session ID is required');
+      }
+
+      const channel = await this.channelUseCases.completeChannelAuth(id, sessionId, metadata);
+
+      const response: ChannelResponseDto = {
+        id: channel.id,
+        name: channel.name,
+        type: channel.type,
+        config: channel.config,
+        provider: channel.provider,
+        is_active: channel.is_active,
+        provider_account: channel.provider_account,
+        default_agent_id: channel.default_agent_id,
+        company_id: channel.company_id,
+        created_at: channel.created_at.toISOString(),
+        updated_at: channel.updated_at.toISOString(),
+        deleted_at: channel.deleted_at?.toISOString()
+      };
+
+      const responseDto = new ResponseDto(true, 'Channel authentication completed successfully', response, 200);
       res.status(200).json(responseDto);
     } catch (error: any) {
       const statusCode = error instanceof HttpError ? error.statusCode : 500;

@@ -17,8 +17,11 @@ export const ChannelsRouter = Router();
 ChannelsRouter.use(authenticate);
 
 // Create and mount modular routers
-ChannelsRouter.use('/', createChannelRouter(prisma));          // /channels/*
-ChannelsRouter.use('/conversations', createConversationRouter(prisma)); // /channels/conversations/*
-ChannelsRouter.use('/messages', createMessageRouter(prisma));  // /channels/messages/*
+// /channels/*
+ChannelsRouter.use('/', createChannelRouter(prisma));          
+// /channels/conversations/*
+ChannelsRouter.use('/conversations', createConversationRouter(prisma)); 
+// /channels/messages/*
+ChannelsRouter.use('/messages', createMessageRouter(prisma));  
 
 export default ChannelsRouter;

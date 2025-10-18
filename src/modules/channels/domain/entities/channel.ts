@@ -18,22 +18,23 @@ export interface ChannelEntity {
 
 export interface CreateChannelData {
   name: string;
-  type: ChannelType;
   config?: any;
-  provider: ChannelProvider;
-  credentials_id: string;
-  provider_account: string;
-  default_agent_id?: number;
+  type: ChannelType;
   company_id: number;
+  is_active: boolean;
+  credentials_id?: string;
+  provider_account: string;
+  provider: ChannelProvider;
+  default_agent_id?: number;
 }
 
 export interface UpdateChannelData {
   name?: string;
-  type?: ChannelType;
   config?: any;
-  provider?: ChannelProvider;
+  type?: ChannelType;
   is_active?: boolean;
   credentials_id?: string;
   provider_account?: string;
   default_agent_id?: number;
+  provider?: ChannelProvider;
 }

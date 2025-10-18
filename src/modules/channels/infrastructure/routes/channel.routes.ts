@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authorize } from '@/middlewares/rbac.middleware.js';
-import { ChannelController } from '../controllers/channel.controller.js';
 import { ChannelRepository } from '../repositories/channel.repository.js';
+import { ChannelValidator } from '../../shared/validators/channel.validator.js';
 import { CredentialRepository } from '../repositories/credential.repository.js';
 import { ChannelUseCases } from '../../application/use-cases/channel.usecases.js';
-import { ChannelValidator } from '../../shared/validators/channel.validator.js';
+import { ChannelController } from '@/modules/channels/infrastructure/controllers/channel.controller.js';
 
 /**
  * Create and configure channel routes
@@ -83,6 +83,23 @@ export function createChannelRouter(prisma: PrismaClient): Router {
     authorize('/channels', 'update'),
     ChannelValidator.validateIdParam,
     channelController.deactivateChannel
+  );
+
+  // GET /:id/qr - Get QR code for authentication
+  channelRouter.get(
+    '/:id/qr',
+    authorize('/channels', 'read'),
+    ChannelValidator.validateIdParam,
+    channelController.getChannelQR
+  );
+
+  // POST /:id/auth - Complete channel authentication
+  channelRouter.post(
+    '/:id/auth',
+    authorize('/channels', 'update'),
+    ChannelValidator.validateIdParam,
+    ChannelValidator.validateCompleteAuth,
+    channelController.completeChannelAuth
   );
 
   return channelRouter;

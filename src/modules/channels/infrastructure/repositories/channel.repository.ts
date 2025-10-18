@@ -1,5 +1,5 @@
+import { ChannelType } from '@prisma/client';
 import { PrismaClient } from '@prisma/client';
-import { ChannelType, ChannelProvider } from '@prisma/client';
 import { ChannelEntity, CreateChannelData, UpdateChannelData } from '../../domain/entities/channel.js';
 import { ChannelRepositoryInterface, ChannelSearchCriteria } from '../../domain/repositories/channel-repository.interface.js';
 
@@ -7,20 +7,7 @@ export class ChannelRepository implements ChannelRepositoryInterface {
   constructor(private prisma: PrismaClient) {}
 
   async create(data: CreateChannelData): Promise<ChannelEntity> {
-    const channel = await this.prisma.channel.create({
-      data: {
-        name: data.name,
-        type: data.type,
-        config: data.config,
-        provider: data.provider,
-        is_active: true, // Default to active
-        credentials_id: data.credentials_id,
-        provider_account: data.provider_account,
-        default_agent_id: data.default_agent_id,
-        company_id: data.company_id
-      }
-    });
-
+    const channel = await this.prisma.channel.create({data});
     return this.mapToEntity(channel);
   }
 
@@ -170,6 +157,18 @@ export class ChannelRepository implements ChannelRepositoryInterface {
     });
 
     return channels.map(channel => this.mapToEntity(channel));
+  }
+
+  async validateCompanyExists(company_id: number): Promise<boolean> {
+    try {
+      const company = await this.prisma.company.findUnique({
+        where: { id: company_id },
+        select: { id: true }
+      });
+      return company !== null;
+    } catch {
+      return false;
+    }
   }
 
   private mapToEntity(channel: any): ChannelEntity {

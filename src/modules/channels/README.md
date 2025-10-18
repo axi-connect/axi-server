@@ -50,10 +50,10 @@ src/modules/channels/
 │   │   ├── message.repository.ts
 │   │   ├── conversation.repository.ts
 │   │   └── credential.repository.ts
-│   ├── routes/              # Configuración de rutas
-│   │   ├── channel.route.ts     # 📍 Archivo principal/orquestador
-│   │   ├── channel.routes.ts    # Rutas específicas de channels
-│   │   ├── message.routes.ts    # Rutas específicas de messages
+│   ├── routes/                    # Configuración de rutas
+│   │   ├── main.route.ts          # 📍 Archivo principal/orquestador
+│   │   ├── channel.routes.ts      # Rutas específicas de channels
+│   │   ├── message.routes.ts      # Rutas específicas de messages
 │   │   └── conversation.routes.ts # Rutas específicas de conversations
 │   └── providers/           # Proveedores de canales externos
 │       ├── BaseProvider.ts
@@ -178,10 +178,29 @@ interface MessageEntity {
   - `/messages` → `create`, `read`, `update`
   - `/conversations` → `create`, `read`, `update`
 
-## 📝 Ejemplos de Uso
+## ✅ Validaciones
 
-### Crear un Canal de WhatsApp
+### Campos Requeridos
+- `name`: Nombre del canal (1-255 caracteres)
+- `type`: Tipo de canal (WHATSAPP, TELEGRAM, EMAIL, etc.)
+- `provider`: Proveedor (META, TWILIO, CUSTOM)
+- `provider_account`: Cuenta del proveedor (única)
+- `company_id`: ID de empresa (debe existir en el sistema)
+- `credentials`: Credenciales (obligatorio para META/TWILIO, opcional para CUSTOM)
 
+### Validaciones de Integridad
+- **Empresa existente**: Se valida que `company_id` corresponda a una empresa registrada
+- **Cuenta única**: No se permiten cuentas de proveedor duplicadas (`provider_account`)
+- **Credenciales válidas**: Para proveedores OAuth, se verifica la autenticidad antes de guardar
+
+## 🔐 Flujos de Inicialización y Autenticación
+
+El módulo implementa **dos fases distintas** para la gestión de canales, dependiendo del tipo de proveedor:
+
+### 📋 **Fase A: Inicialización** (Registro del Canal)
+Creación del canal con configuración base en el sistema.
+
+#### Proveedores con OAuth/Token (META, TWILIO)
 ```bash
 POST /channels
 Authorization: Bearer <your-jwt-token>
@@ -204,6 +223,102 @@ Content-Type: application/json
   "company_id": 1
 }
 ```
+
+**Respuesta**: Canal creado y **activado automáticamente** (is_active = true)
+
+#### Proveedores con Login Manual (CUSTOM - WhatsApp Web)
+```bash
+POST /channels
+Authorization: Bearer <your-jwt-token>
+Content-Type: application/json
+
+{
+  "name": "WhatsApp Web Personal",
+  "type": "WHATSAPP",
+  "provider": "CUSTOM",
+  "provider_account": "573001234567",
+  "company_id": 1
+}
+```
+
+**Respuesta**: Canal creado **inactivo** con sesión de autenticación
+```json
+{
+  "success": true,
+  "message": "Channel created successfully",
+  "data": {
+    "id": "uuid",
+    "name": "WhatsApp Web Personal",
+    "is_active": false,
+    "authSession": {
+      "sessionId": "session-uuid",
+      "status": "pending",
+      "expiresAt": "2024-01-15T11:00:00Z"
+    }
+  }
+}
+```
+
+**Obtener QR para autenticación**:
+```bash
+GET /channels/{channelId}/qr
+Authorization: Bearer <your-jwt-token>
+```
+
+**Respuesta con QR real de WhatsApp Web**:
+```json
+{
+  "successful": true,
+  "data": {
+    "qrCode": "1@abc123def456...[QR data real de WhatsApp]",
+    "qrCodeUrl": "/qr-images/qr-session-uuid.svg",
+    "sessionId": "session-uuid",
+    "expiresAt": "2024-01-15T11:00:00Z"
+  }
+}
+```
+
+> **Nota**: Si el canal ya está autenticado, el endpoint devolverá un error indicando que no necesita QR. El sistema previene intentos múltiples de inicialización que podrían causar conflictos con Puppeteer.
+
+### 🔓 **Fase B: Autenticación** (Activación del Canal)
+Proceso de login/autenticación para canales que lo requieren.
+
+#### Obtener Código QR (para WhatsApp Web)
+```bash
+GET /channels/{channelId}/qr
+Authorization: Bearer <your-jwt-token>
+```
+
+**Respuesta**:
+```json
+{
+  "success": true,
+  "message": "QR code generated successfully",
+  "data": {
+    "qrCode": "whatsapp-auth-session-uuid-timestamp",
+    "qrCodeUrl": "/api/channels/uuid/qr-image/session-uuid",
+    "sessionId": "session-uuid",
+    "expiresAt": "2024-01-15T11:00:00Z"
+  }
+}
+```
+
+#### Completar Autenticación
+```bash
+POST /channels/{channelId}/auth
+Authorization: Bearer <your-jwt-token>
+Content-Type: application/json
+
+{
+  "sessionId": "session-uuid",
+  "metadata": {
+    "phoneNumber": "+573001234567",
+    "authenticated": true
+  }
+}
+```
+
+## 📝 Ejemplos de Uso
 
 ### Listar Canales con Filtros
 
@@ -229,9 +344,10 @@ Content-Type: application/json
 }
 ```
 
-### Asignar Agente a Conversación
+### Gestionar Conversaciones
 
 ```bash
+# Asignar agente
 PUT /channels/conversations/123e4567-e89b-12d3-a456-426614174000/assign-agent
 Authorization: Bearer <your-jwt-token>
 Content-Type: application/json
@@ -239,6 +355,10 @@ Content-Type: application/json
 {
   "agent_id": 42
 }
+
+# Desasignar agente
+PUT /channels/conversations/123e4567-e89b-12d3-a456-426614174000/unassign-agent
+Authorization: Bearer <your-jwt-token>
 ```
 
 ## ⚙️ Configuración

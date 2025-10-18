@@ -57,33 +57,19 @@ const configSchema = Joi.object({
 
 // Esquema base para canales
 const channelBaseSchema = {
+    config: configSchema,
+    credentials: credentialsSchema,
+    is_active: Joi.boolean().label('activo'),
     name: Joi.string().min(1).max(255).trim().label('nombre'),
+    company_id: Joi.number().integer().min(1).label('empresa'),
+    expires_at: Joi.date().iso().optional().label('fecha de expiración'),
     type: Joi.string().valid(...Object.values(ChannelType)).label('tipo'),
     provider: Joi.string().valid(...Object.values(ChannelProvider)).label('proveedor'),
     provider_account: Joi.string().min(1).max(255).trim().label('cuenta del proveedor'),
-    credentials: credentialsSchema,
-    config: configSchema,
-    is_active: Joi.boolean().label('activo'),
-    default_agent_id: Joi.alternatives().try(Joi.number().integer().min(1), Joi.valid(null)).label('agente por defecto'),
-    company_id: Joi.number().integer().min(1).label('empresa'),
-    expires_at: Joi.date().iso().optional().label('fecha de expiración')
+    default_agent_id: Joi.alternatives().try(Joi.number().integer().min(1), Joi.valid(null)).label('agente por defecto')
 };
 
-// Esquemas específicos para cada operación
-const channelCreateSchema = Joi.object({
-    ...channelBaseSchema,
-    // Campos requeridos para crear
-    name: channelBaseSchema.name.required(),
-    type: channelBaseSchema.type.required(),
-    provider: channelBaseSchema.provider.required(),
-    provider_account: channelBaseSchema.provider_account.required(),
-    credentials: channelBaseSchema.credentials.required(),
-    company_id: channelBaseSchema.company_id.required(),
-    // Campos opcionales
-    config: channelBaseSchema.config.optional(),
-    default_agent_id: channelBaseSchema.default_agent_id.optional(),
-    expires_at: channelBaseSchema.expires_at.optional()
-}).messages(baseMessages);
+// Esquemas específicos para cada operación (solo para referencia, ya no se usan estáticamente)
 
 const channelUpdateSchema = Joi.object(channelBaseSchema).min(1).messages(baseMessages);
 
@@ -108,10 +94,31 @@ const channelIdSchema = Joi.object({
 export class ChannelValidator {
     /**
      * Valida el cuerpo para crear un canal
-     * Retorna 400 con ResponseDto si la entrada es inválida
+     * Las credenciales son requeridas para proveedores OAuth (Meta, Twilio)
+     * pero opcionales para proveedores con login manual (Custom)
      */
     static validateCreate(req: Request, res: Response, next: NextFunction): void {
-        const { error } = channelCreateSchema.validate(req.body, {
+        const { provider } = req.body;
+        const requiresAuth = provider && [ChannelProvider.META, ChannelProvider.TWILIO].includes(provider);
+
+        // Crear esquema dinámico basado en el proveedor
+        const dynamicSchema = Joi.object({
+            ...channelBaseSchema,
+            // Campos requeridos para crear
+            name: channelBaseSchema.name.required(),
+            type: channelBaseSchema.type.required(),
+            provider: channelBaseSchema.provider.required(),
+            provider_account: channelBaseSchema.provider_account.required(),
+            company_id: channelBaseSchema.company_id.required(),
+            // Credenciales: requeridas para OAuth, opcionales para QR
+            credentials: requiresAuth ? channelBaseSchema.credentials.required() : channelBaseSchema.credentials.optional(),
+            // Campos opcionales
+            config: channelBaseSchema.config.optional(),
+            default_agent_id: channelBaseSchema.default_agent_id.optional(),
+            expires_at: channelBaseSchema.expires_at.optional()
+        }).messages(baseMessages);
+
+        const { error } = dynamicSchema.validate(req.body, {
             abortEarly: false,
             convert: true,
             errors: { wrap: { label: '' } }
@@ -237,6 +244,30 @@ export class ChannelValidator {
 
         if (error) {
             const message = `Credenciales inválidas para ${provider}: ${error.details.map(d => d.message).join(', ')}`;
+            const response = new ResponseDto(false, message, null, 400);
+            res.status(400).json(response);
+        } else {
+            next();
+        }
+    }
+
+    /**
+     * Valida el cuerpo para completar autenticación
+    */
+    static validateCompleteAuth(req: Request, res: Response, next: NextFunction): void {
+        const completeAuthSchema = Joi.object({
+            sessionId: Joi.string().uuid().required().label('ID de sesión'),
+            metadata: Joi.object().optional().label('metadata adicional')
+        }).messages(baseMessages);
+
+        const { error } = completeAuthSchema.validate(req.body, {
+            abortEarly: false,
+            convert: true,
+            errors: { wrap: { label: '' } }
+        });
+
+        if (error) {
+            const message = error.details.map(d => d.message).join(', ');
             const response = new ResponseDto(false, message, null, 400);
             res.status(400).json(response);
         } else {

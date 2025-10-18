@@ -1,10 +1,11 @@
 enum ChannelProvider {
-  META // Meta/WhatsApp Cloud API
-  TWILIO
-  CUSTOM
+  TWILIO     // Twilio
+  CUSTOM     // Custom provider
+  META       // Meta/WhatsApp Cloud API
+  DEFAULT    // Base provider for free providers whatsapp-web.js
 
   @@schema("channels")
-}
+} 
 
 enum AgentStatus {
   available
@@ -140,21 +141,21 @@ model Conversation {
 }
 
 model Channel {
-  id               String            @id @default(uuid())
+  id               String             @id @default(uuid())
   name             String // Nombre asignado a el canal | nombre de usuario | nombre de la empresa
   type             ChannelType // Tipo de canal | whatsapp | telegram | instagram | messenger | email | call
   config           Json? // provider specific config (webhook paths, phoneNumberId, etc.)
   provider         ChannelProvider // Proveedor de canal | meta | twilio | custom
-  is_active        Boolean           @default(true) // Estado del canal | true | false
-  credentials_id   String            @unique // FK to ChannelCredential
-  provider_account String            @unique // Numero de telefono | ID de la empresa de meta
+  is_active        Boolean            @default(true) // Estado del canal | true | false
+  credentials_id   String?            @unique // FK to ChannelCredential
+  provider_account String             @unique // Numero de telefono | ID de la empresa de meta
   default_agent_id Int? // optional default agent for incoming messages
   company_id       Int
-  company          Company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  credentials      ChannelCredential @relation(fields: [credentials_id], references: [id])
+  company          Company            @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  credentials      ChannelCredential? @relation(fields: [credentials_id], references: [id])
   conversations    Conversation[]
-  created_at       DateTime          @default(now())
-  updated_at       DateTime          @updatedAt
+  created_at       DateTime           @default(now())
+  updated_at       DateTime           @updatedAt
   deleted_at       DateTime? // soft delete
   // templates         Template[]
   // webhooks          WebhookLog[]

@@ -16,7 +16,7 @@ export function authorize(moduleRoute: string, required: Permission) {
         return;
       }
 
-      const modules = await rbacRepository.getModule([moduleRoute], 'route');
+      const modules = await rbacRepository.getModule([moduleRoute], 'path');
       if (!modules.length) {
         res.status(404).json(new ResponseDto(false, 'Módulo no configurado', null, 404));
         return;

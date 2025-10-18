@@ -4,15 +4,15 @@ import { ChannelEntity, CreateChannelData, UpdateChannelData } from '../entities
 export interface ChannelSearchCriteria {
   id?: string;
   name?: string;
-  type?: ChannelType;
-  provider?: ChannelProvider;
-  is_active?: boolean;
-  company_id?: number;
-  provider_account?: string;
   limit?: number;
   offset?: number;
-  sortBy?: 'created_at' | 'updated_at' | 'name';
+  type?: ChannelType;
+  is_active?: boolean;
+  company_id?: number;
   sortDir?: 'asc' | 'desc';
+  provider_account?: string;
+  provider?: ChannelProvider;
+  sortBy?: 'created_at' | 'updated_at' | 'name';
 }
 
 export interface ChannelRepositoryInterface {
@@ -28,4 +28,5 @@ export interface ChannelRepositoryInterface {
   countByCompany(company_id: number): Promise<number>;
   exists(id: string): Promise<boolean>;
   findActiveByType(type: ChannelType, company_id: number): Promise<ChannelEntity[]>;
+  validateCompanyExists(company_id: number): Promise<boolean>;
 }
