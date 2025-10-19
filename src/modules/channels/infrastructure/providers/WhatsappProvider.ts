@@ -6,38 +6,66 @@ import { BaseProvider, ProviderConfig, MessagePayload, ProviderResponse, Webhook
 const { Client, LocalAuth } = pkg;
 
 export class WhatsappProvider extends BaseProvider {
-    private isInitialized = false;
-    private readonly channelId: string;
-    private authSessionService: AuthSessionService;
-    private client: InstanceType<typeof Client> | null = null;
-    private messageTimers: Map<string, NodeJS.Timeout> = new Map();
+  private readonly channelId: string;
+  private authenticated: boolean = false;
+  private authSessionService: AuthSessionService;
+  private client: InstanceType<typeof Client> | null = null;
+  private messageTimers: Map<string, NodeJS.Timeout> = new Map();
 
-    constructor(config: ProviderConfig, channelId: string, authSessionService: AuthSessionService) {
-        super(config, ChannelProvider.CUSTOM);
-        this.channelId = channelId;
-        this.authSessionService = authSessionService;
+  constructor(config: ProviderConfig, channelId: string, authSessionService: AuthSessionService) {
+    super(config, ChannelProvider.CUSTOM);
+    this.channelId = channelId;
+    this.authSessionService = authSessionService;
+  }
+
+  /**
+   * Inicializa el cliente de WhatsApp si no está listo
+   * Garantiza que solo se inicialice una vez por instancia
+   */
+  private async ensureClient(): Promise<void> {
+    // Si el cliente ya está listo, no hacer nada
+    if (this.client?.info?.wid?.user) return;
+
+    // Crear cliente si no existe
+    if (!this.client) {
+      this.client = new Client({
+        authStrategy: new LocalAuth({
+          clientId: this.channelId,
+        }),
+        puppeteer: {
+          executablePath: this.config.executablePath || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        },
+      });
+
+      this.setupEventHandlers();
+    }
+  }
+
+  /**
+   * Reinicia completamente el cliente de WhatsApp
+   */
+  async reinitialize(): Promise<void> {
+    console.log(`Forcing reinitialization of WhatsApp client for channel ${this.channelId}`);
+
+    // Destruir cliente existente
+    if (this.client) {
+      try {
+        await this.client.destroy();
+      } catch (error) {
+        console.error(`Error destroying client for channel ${this.channelId}:`, error);
+      }
     }
 
-    /**
-     * Initialize the WhatsApp client if not already initialized
-    */
-    private async ensureClient(): Promise<void> {
-        if (this.client && this.isInitialized) return;
+    // Resetear estado
+    this.client = null;
 
-        this.client = new Client({
-            authStrategy: new LocalAuth({
-                clientId: this.channelId,
-                // dataPath can be configured via config
-            }),
-            puppeteer: {
-                executablePath: this.config.executablePath || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-            },
-        });
-
-        if (this.client) this.setupEventHandlers();
-        this.isInitialized = true;
+    // Limpiar timers
+    for (const timer of this.messageTimers.values()) {
+      clearTimeout(timer);
     }
+    this.messageTimers.clear();
+  }
 
   async sendMessage(payload: MessagePayload): Promise<ProviderResponse> {
     try {
@@ -67,9 +95,6 @@ export class WhatsappProvider extends BaseProvider {
 
   async validateCredentials(): Promise<boolean> {
     try {
-      await this.ensureClient();
-      // For WhatsApp Web, we consider it valid if we have a session
-      // The actual validation happens during QR authentication
       return !!(this.client?.info?.wid?.user);
     } catch {
       return false;
@@ -86,131 +111,115 @@ export class WhatsappProvider extends BaseProvider {
     return 'WhatsApp Web';
   }
 
-    /**
-     * Generate QR code for WhatsApp Web authentication
-     * Returns QR string if needed, empty string if already authenticated
-     */
-    async generateQR(): Promise<string> {
-        await this.ensureClient();
+  /**
+   * Genera código QR para autenticación de WhatsApp Web
+   */
+  async generateQR(forceReinit: boolean = false): Promise<string> {
+    // Reinicializar si se solicita (sesión expirada)
+    if (forceReinit) await this.reinitialize();
 
-        // Check if client is already authenticated
-        if (this.client && this.client.info?.wid?.user) {
-            console.log(`WhatsApp client already authenticated for channel ${this.channelId}`);
-            return ''; // Already authenticated
+    // Si ya está autenticado, no generar QR
+    if (this.client?.info?.wid?.user) return '';
+
+    // Asegurarse de que el cliente esté inicializado
+    await this.ensureClient();
+
+    // Generar QR con timeout
+    return new Promise((resolve, reject) => {
+      let resolved = false;
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          reject(new Error('QR generation timeout'));
+        }
+      }, 30000);
+
+      // Eventos de una sola vez
+      const cleanup = () => {
+        clearTimeout(timeout);
+        resolved = true;
+      };
+
+      this.client!.once('qr', (qr: string) => {
+        console.log('qr');
+        cleanup();
+        resolve(qr);
+      });
+
+      this.client!.once('authenticated', () => {
+        console.log('authenticated');
+        this.authenticated = true;
+        cleanup();
+        resolve('');
+      });
+
+      this.client!.once('ready', () => {
+        console.log('ready');
+        this.authenticated = true;
+        cleanup();
+        resolve('');
+      });
+
+      this.client!.once('auth_failure', (error) => {
+        console.log('auth_failure');
+        cleanup();
+        reject(error);
+      });
+
+      this.client!.initialize().catch((error) => {
+        console.log('initialize');
+        cleanup();
+        reject(error);
+      });
+    });
+  }
+
+  /**
+   * Setup event handlers for incoming messages
+  */
+  private setupEventHandlers(): void {
+    if (!this.client) return;
+
+    this.client.on('message', async (message: any) => {
+      try {
+        // Filter out status messages and group messages
+        if (message.isStatus || message.from.includes('@g.us')) return
+
+        const contact = await message.getContact();
+        const contactId = contact.id._serialized;
+        const contactInfo = {
+          id: contactId,
+          name: contact.name || contact.pushname || 'Unknown',
+          number: contact.number,
+          company_id: this.config.company_id
+        };
+
+        // Handle message processing with debouncing
+        const timerKey = contactId;
+        if (this.messageTimers.has(timerKey)) {
+          clearTimeout(this.messageTimers.get(timerKey)!);
         }
 
-        return new Promise((resolve, reject) => {
-            if (!this.client) {
-                reject(new Error('Failed to initialize WhatsApp client'));
-                return;
-            }
+        const timer = setTimeout(async () => {
+        this.messageTimers.delete(timerKey);
 
-            let resolved = false;
+        // Process the message through the configured message handler
+        if (this.config.onMessage) {
+          await this.config.onMessage({
+          contact: contactInfo,
+          message: message.body,
+          current_message: message,
+          channelId: this.channelId
+          });
+        }
+        }, 1000); // 1 second debounce
 
-            // Handle QR code generation
-            this.client.once('qr', (qr: string) => {
-                if (!resolved) {
-                    resolved = true;
-                    console.log(`QR generated for channel ${this.channelId}`);
-                    resolve(qr);
-                }
-            });
-
-            // Handle authentication success
-            this.client.once('authenticated', () => {
-                if (!resolved) {
-                    resolved = true;
-                    console.log(`WhatsApp authenticated for channel ${this.channelId}`);
-                    resolve(''); // Authentication completed
-                }
-            });
-
-            // Handle client ready
-            this.client.once('ready', () => {
-                if (!resolved) {
-                    resolved = true;
-                    console.log(`WhatsApp client ready for channel ${this.channelId}`);
-                    resolve(''); // Already ready
-                }
-            });
-
-            // Handle authentication failure
-            this.client.once('auth_failure', (error) => {
-                if (!resolved) {
-                    resolved = true;
-                    console.error(`WhatsApp auth failure for channel ${this.channelId}:`, error);
-                    reject(error);
-                }
-            });
-
-            // Initialize the client with timeout
-            this.client.initialize().catch((error) => {
-                if (!resolved) {
-                    resolved = true;
-                    console.error(`Failed to initialize WhatsApp client for channel ${this.channelId}:`, error);
-                    reject(error);
-                }
-            });
-
-            // Add timeout to prevent hanging
-            setTimeout(() => {
-                if (!resolved) {
-                    resolved = true;
-                    reject(new Error('QR generation timeout'));
-                }
-            }, 30000); // 30 seconds timeout
-        });
-    }
-
-    /**
-     * Setup event handlers for incoming messages
-    */
-    private setupEventHandlers(): void {
-        if (!this.client) return;
-
-        this.client.on('message', async (message: any) => {
-            try {
-                // Filter out status messages and group messages
-                if (message.isStatus || message.from.includes('@g.us')) {
-                return;
-                }
-
-                const contact = await message.getContact();
-                const contactId = contact.id._serialized;
-                const contactInfo = {
-                id: contactId,
-                name: contact.name || contact.pushname || 'Unknown',
-                number: contact.number,
-                company_id: this.config.company_id
-                };
-
-                // Handle message processing with debouncing
-                const timerKey = contactId;
-                if (this.messageTimers.has(timerKey)) {
-                clearTimeout(this.messageTimers.get(timerKey)!);
-                }
-
-                const timer = setTimeout(async () => {
-                this.messageTimers.delete(timerKey);
-
-                // Process the message through the configured message handler
-                if (this.config.onMessage) {
-                    await this.config.onMessage({
-                    contact: contactInfo,
-                    message: message.body,
-                    current_message: message,
-                    channelId: this.channelId
-                    });
-                }
-                }, 1000); // 1 second debounce
-
-                this.messageTimers.set(timerKey, timer);
-
-            } catch (error) {
-                console.error('Error processing WhatsApp message:', error);
-            }
-        });
-    }
+        this.messageTimers.set(timerKey, timer);
+      } catch (error) {
+        console.error('Error processing WhatsApp message:', error);
+      }
+    });
+  }
 
   /**
    * Send message through callback (for compatibility with existing system)
@@ -227,39 +236,45 @@ export class WhatsappProvider extends BaseProvider {
   }
 
   /**
-   * Get client info
+   * Obtiene información del cliente
    */
   async getClientInfo(): Promise<any> {
-    await this.ensureClient();
     return this.client?.info;
   }
 
   /**
-   * Check if client is ready
+   * Verifica si el cliente está listo
    */
   async isReady(): Promise<boolean> {
-    await this.ensureClient();
-    return this.client?.info?.wid?.user !== undefined;
+    return !!(this.client?.info?.wid?.user);
   }
 
   /**
-   * Destroy the client
+   * Verifica si el cliente está autenticado
+  */
+  async isAuthenticated(): Promise<boolean> {
+    return this.authenticated;
+  }
+
+  /**
+   * Destruye el cliente y limpia recursos
    */
   async destroy(): Promise<void> {
     try {
       if (this.client) {
         await this.client.destroy();
-        this.client = null;
       }
     } catch (error) {
-      console.error(`Error destroying WhatsApp client for channel ${this.channelId}:`, error);
+      console.error(`Error destroying client for channel ${this.channelId}:`, error);
     }
 
-    // Clear all timers
+    // Limpiar estado
+    this.client = null;
+
+    // Limpiar timers
     for (const timer of this.messageTimers.values()) {
       clearTimeout(timer);
     }
     this.messageTimers.clear();
-    this.isInitialized = false;
   }
 }

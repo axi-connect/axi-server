@@ -61,14 +61,6 @@ export class ChannelCredentialUseCases {
     return this.credentialRepository.update(id, updateData);
   }
 
-  async activateCredential(id: string): Promise<ChannelCredentialEntity> {
-    return this.credentialRepository.activate(id);
-  }
-
-  async deactivateCredential(id: string): Promise<ChannelCredentialEntity> {
-    return this.credentialRepository.deactivate(id);
-  }
-
   async validateCredential(id: string): Promise<boolean> {
     return this.credentialRepository.validateCredentials(id);
   }

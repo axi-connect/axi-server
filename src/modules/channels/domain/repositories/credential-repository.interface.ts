@@ -21,8 +21,6 @@ export interface CredentialRepositoryInterface {
   search(criteria: CredentialSearchCriteria): Promise<{ credentials: ChannelCredentialEntity[], total: number }>;
   update(id: string, data: UpdateChannelCredentialData): Promise<ChannelCredentialEntity>;
   delete(id: string): Promise<boolean>;
-  activate(id: string): Promise<ChannelCredentialEntity>;
-  deactivate(id: string): Promise<ChannelCredentialEntity>;
   findExpired(): Promise<ChannelCredentialEntity[]>;
   validateCredentials(id: string): Promise<boolean>;
 }

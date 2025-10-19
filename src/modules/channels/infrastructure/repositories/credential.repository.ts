@@ -82,9 +82,7 @@ export class CredentialRepository implements CredentialRepositoryInterface {
     const credential = await this.prisma.channelCredential.update({
       where: { id },
       data: {
-        credentials: data.credentials,
-        is_active: data.is_active,
-        expires_at: data.expires_at,
+        ...data,
         updated_at: new Date()
       }
     });
@@ -101,24 +99,6 @@ export class CredentialRepository implements CredentialRepositoryInterface {
     } catch {
       return false;
     }
-  }
-
-  async activate(id: string): Promise<ChannelCredentialEntity> {
-    const credential = await this.prisma.channelCredential.update({
-      where: { id },
-      data: { is_active: true, updated_at: new Date() }
-    });
-
-    return this.mapToEntity(credential);
-  }
-
-  async deactivate(id: string): Promise<ChannelCredentialEntity> {
-    const credential = await this.prisma.channelCredential.update({
-      where: { id },
-      data: { is_active: false, updated_at: new Date() }
-    });
-
-    return this.mapToEntity(credential);
   }
 
   async findExpired(): Promise<ChannelCredentialEntity[]> {

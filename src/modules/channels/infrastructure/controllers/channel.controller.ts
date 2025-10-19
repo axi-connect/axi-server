@@ -7,6 +7,16 @@ import { CreateChannelRequestDto, ChannelResponseDto, UpdateChannelRequestDto, C
 export class ChannelController {
   constructor(private channelUseCases: ChannelUseCases) {}
 
+  private formatter = new Intl.DateTimeFormat('es-CO', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false, // 24 horas
+    timeZone: 'America/Bogota' // Especificar la zona horaria
+  });
+
   createChannel = async (req: Request, res: Response): Promise<void> => {
     try {
       const body: CreateChannelRequestDto = req.body;
@@ -25,12 +35,12 @@ export class ChannelController {
         config: channel.config,
         provider: channel.provider,
         is_active: channel.is_active,
+        company_id: channel.company_id,
         provider_account: channel.provider_account,
         default_agent_id: channel.default_agent_id,
-        company_id: channel.company_id,
-        created_at: channel.created_at.toISOString(),
-        updated_at: channel.updated_at.toISOString(),
-        deleted_at: channel.deleted_at?.toISOString()
+        created_at: this.formatter.format(channel.created_at),
+        updated_at: this.formatter.format(channel.updated_at),
+        deleted_at: channel.deleted_at ? this.formatter.format(channel.deleted_at) : undefined
       };
 
       const responseDto = new ResponseDto(true, 'Channel created successfully', response, 201);
@@ -58,9 +68,9 @@ export class ChannelController {
         provider_account: channel.provider_account,
         default_agent_id: channel.default_agent_id,
         company_id: channel.company_id,
-        created_at: channel.created_at.toISOString(),
-        updated_at: channel.updated_at.toISOString(),
-        deleted_at: channel.deleted_at?.toISOString()
+        created_at: this.formatter.format(channel.created_at),
+        updated_at: this.formatter.format(channel.updated_at),
+        deleted_at: channel.deleted_at ? this.formatter.format(channel.deleted_at) : undefined
       };
 
       const responseDto = new ResponseDto(true, 'Channel retrieved successfully', response, 200);
@@ -245,7 +255,7 @@ export class ChannelController {
         qrCode: qrData.qrCode,
         qrCodeUrl: qrData.qrCodeUrl,
         sessionId: qrData.sessionId,
-        expiresAt: qrData.expiresAt.toISOString()
+        expiresAt: this.formatter.format(qrData.expiresAt)
       }, 200);
       res.status(200).json(responseDto);
     } catch (error: any) {
@@ -259,11 +269,6 @@ export class ChannelController {
     try {
       const { id } = req.params;
       const { sessionId, metadata } = req.body;
-
-      if (!sessionId) {
-        throw new HttpError(400, 'Session ID is required');
-      }
-
       const channel = await this.channelUseCases.completeChannelAuth(id, sessionId, metadata);
 
       const response: ChannelResponseDto = {
@@ -273,12 +278,12 @@ export class ChannelController {
         config: channel.config,
         provider: channel.provider,
         is_active: channel.is_active,
+        company_id: channel.company_id,
         provider_account: channel.provider_account,
         default_agent_id: channel.default_agent_id,
-        company_id: channel.company_id,
-        created_at: channel.created_at.toISOString(),
-        updated_at: channel.updated_at.toISOString(),
-        deleted_at: channel.deleted_at?.toISOString()
+        created_at: this.formatter.format(channel.created_at),
+        updated_at: this.formatter.format(channel.updated_at),
+        deleted_at: channel.deleted_at ? this.formatter.format(channel.deleted_at) : undefined
       };
 
       const responseDto = new ResponseDto(true, 'Channel authentication completed successfully', response, 200);

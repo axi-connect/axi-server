@@ -278,7 +278,15 @@ Authorization: Bearer <your-jwt-token>
 }
 ```
 
-> **Nota**: Si el canal ya está autenticado, el endpoint devolverá un error indicando que no necesita QR. El sistema previene intentos múltiples de inicialización que podrían causar conflictos con Puppeteer.
+**Refrescar QR después de expiración**:
+Si la sesión de autenticación expira antes de que el usuario complete el proceso, puedes llamar nuevamente al endpoint `GET /channels/{id}/qr` para generar un nuevo código QR. El sistema automáticamente:
+
+- Detecta que la sesión anterior expiró
+- Limpia la instancia anterior del navegador
+- Crea una nueva sesión de autenticación
+- Genera un QR fresco para escanear
+
+> **Nota**: El sistema maneja automáticamente la limpieza de sesiones expiradas y reinicialización de instancias de WhatsApp para evitar conflictos con Puppeteer.
 
 ### 🔓 **Fase B: Autenticación** (Activación del Canal)
 Proceso de login/autenticación para canales que lo requieren.

@@ -69,8 +69,6 @@ const channelBaseSchema = {
     default_agent_id: Joi.alternatives().try(Joi.number().integer().min(1), Joi.valid(null)).label('agente por defecto')
 };
 
-// Esquemas específicos para cada operación (solo para referencia, ya no se usan estáticamente)
-
 const channelUpdateSchema = Joi.object(channelBaseSchema).min(1).messages(baseMessages);
 
 const channelSearchSchema = Joi.object({
@@ -119,8 +117,8 @@ export class ChannelValidator {
         }).messages(baseMessages);
 
         const { error } = dynamicSchema.validate(req.body, {
-            abortEarly: false,
             convert: true,
+            abortEarly: false,
             errors: { wrap: { label: '' } }
         });
 
@@ -128,9 +126,10 @@ export class ChannelValidator {
             const message = error.details.map(d => d.message).join(', ');
             const response = new ResponseDto(false, message, null, 400);
             res.status(400).json(response);
-        } else {
-            next();
+            return;
         }
+
+        next();
     }
 
     /**
@@ -246,9 +245,10 @@ export class ChannelValidator {
             const message = `Credenciales inválidas para ${provider}: ${error.details.map(d => d.message).join(', ')}`;
             const response = new ResponseDto(false, message, null, 400);
             res.status(400).json(response);
-        } else {
-            next();
+            return;
         }
+
+        next();
     }
 
     /**
@@ -270,8 +270,9 @@ export class ChannelValidator {
             const message = error.details.map(d => d.message).join(', ');
             const response = new ResponseDto(false, message, null, 400);
             res.status(400).json(response);
-        } else {
-            next();
+            return;
         }
+
+        next();
     }
 }

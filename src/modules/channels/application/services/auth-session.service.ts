@@ -3,15 +3,15 @@ import { ChannelProvider } from '@prisma/client';
 
 export interface AuthSession {
   id: string;
-  channelId: string;
-  provider: ChannelProvider;
-  status: 'pending' | 'completed' | 'failed' | 'expired';
+  metadata?: any;
   qrCode?: string;
-  qrCodeUrl?: string;
   expiresAt: Date;
   createdAt: Date;
+  channelId: string;
+  qrCodeUrl?: string;
   completedAt?: Date;
-  metadata?: any;
+  provider: ChannelProvider;
+  status: 'pending' | 'completed' | 'failed' | 'expired';
 }
 
 export class AuthSessionService {
@@ -80,6 +80,9 @@ export class AuthSessionService {
    * @returns Sesión activa o null
    */
   getActiveSessionByChannel(channelId: string): AuthSession | null {
+    // Limpiar sesiones expiradas primero
+    this.cleanupExpiredSessions();
+
     for (const session of this.sessions.values()) {
       if (session.channelId === channelId &&
           session.status === 'pending' &&
@@ -88,6 +91,18 @@ export class AuthSessionService {
       }
     }
     return null;
+  }
+
+  /**
+   * Limpia las sesiones expiradas
+  */
+  private cleanupExpiredSessions(): void {
+    const now = new Date();
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (session.expiresAt < now && session.status === 'pending') {
+        this.expireSession(sessionId);
+      }
+    }
   }
 
   /**
@@ -140,21 +155,10 @@ export class AuthSessionService {
     }
   }
 
-  /**
-   * Limpia sesiones expiradas
-   */
-  cleanupExpiredSessions(): void {
-    const now = new Date();
-    for (const [sessionId, session] of this.sessions.entries()) {
-      if (session.expiresAt < now && session.status === 'pending') {
-        this.expireSession(sessionId);
-      }
-    }
-  }
 
   /**
    * Obtiene estadísticas de sesiones
-   */
+  */
   getStats(): {
     total: number;
     pending: number;
