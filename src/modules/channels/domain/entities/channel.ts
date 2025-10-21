@@ -7,7 +7,7 @@ export interface ChannelEntity {
   config?: any;
   provider: ChannelProvider;
   is_active: boolean;
-  credentials_id: string;
+  credentials_id: string | null;
   provider_account: string;
   default_agent_id?: number;
   company_id: number;
@@ -37,4 +37,32 @@ export interface UpdateChannelData {
   provider_account?: string;
   default_agent_id?: number;
   provider?: ChannelProvider;
+}
+
+export interface ChannelStatus {
+  channelId: string;
+  provider: string;
+  type: string;
+  isActive: boolean;
+  isConnected: boolean;
+  isAuthenticated: boolean;
+  lastActivity?: Date;
+  errorMessage?: string;
+}
+
+export interface RuntimeMessage {
+  id: string;
+  channelId: string;
+  direction: 'incoming' | 'outgoing';
+  content: any;
+  timestamp: Date;
+  metadata?: any;
+}
+
+export interface WebSocketEvent {
+  event: string;
+  channelId: string;
+  companyId: number;
+  data: any;
+  timestamp: Date;
 }

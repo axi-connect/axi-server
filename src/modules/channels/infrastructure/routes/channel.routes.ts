@@ -1,30 +1,25 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { authorize } from '@/middlewares/rbac.middleware.js';
-import { ChannelRepository } from '../repositories/channel.repository.js';
+import { getChannelsContainer } from '../channels.container.js';
 import { ChannelValidator } from '../../shared/validators/channel.validator.js';
-import { CredentialRepository } from '../repositories/credential.repository.js';
-import { ChannelUseCases } from '../../application/use-cases/channel.usecases.js';
 import { ChannelController } from '@/modules/channels/infrastructure/controllers/channel.controller.js';
 
 /**
- * Create and configure channel routes
+ * Create and configure channel routes with proper dependency injection
  * @param prisma - Prisma client instance
+ * @param runtimeService - Channel runtime service instance
  * @returns Configured channel router
- */
-export function createChannelRouter(prisma: PrismaClient): Router {
-  // Initialize repositories
-  const channelRepository = new ChannelRepository(prisma);
-  const credentialRepository = new CredentialRepository(prisma);
-
-  // Initialize use cases
-  const channelUseCases = new ChannelUseCases(channelRepository, credentialRepository);
-
-  // Initialize controller
-  const channelController = new ChannelController(channelUseCases);
-
+*/
+export function createChannelRouter(): Router {
   // Create router
   const channelRouter = Router();
+
+  // Get dependencies from container
+  const container = getChannelsContainer();
+  const channelUseCases = container.getChannelUseCases();
+
+  // Initialize controller with injected dependencies
+  const channelController = new ChannelController(channelUseCases);
 
   // CHANNELS ROUTES
   // POST / - Create a new channel

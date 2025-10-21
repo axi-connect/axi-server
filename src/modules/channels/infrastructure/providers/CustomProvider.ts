@@ -47,6 +47,19 @@ export class CustomProvider extends BaseProvider {
     }
   }
 
+  async isAuthenticated(): Promise<boolean> {
+    try {
+      // Custom authentication check - use validateCredentials by default
+      if (this.config.customAuthFunction) {
+        return await this.config.customAuthFunction(this.config);
+      }
+
+      return await this.validateCredentials();
+    } catch {
+      return false;
+    }
+  }
+
   parseWebhook(data: any): WebhookMessage | null {
     try {
       // Custom webhook parsing - expect standard format
@@ -71,5 +84,19 @@ export class CustomProvider extends BaseProvider {
 
   getProviderName(): string {
     return 'Custom Provider';
+  }
+
+  async destroy(): Promise<void> {
+    try {
+      // Custom cleanup logic
+      if (this.config.customDestroyFunction) {
+        await this.config.customDestroyFunction(this.config);
+      }
+
+      // Default cleanup - nothing special needed for custom providers
+      console.log('Custom provider destroyed');
+    } catch (error) {
+      console.error('Error destroying custom provider:', error);
+    }
   }
 }

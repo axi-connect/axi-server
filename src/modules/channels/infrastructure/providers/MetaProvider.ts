@@ -67,6 +67,15 @@ export class MetaProvider extends BaseProvider {
     }
   }
 
+  async isAuthenticated(): Promise<boolean> {
+    try {
+      // For Meta, authentication is validated via credentials
+      return await this.validateCredentials();
+    } catch {
+      return false;
+    }
+  }
+
   parseWebhook(data: any): WebhookMessage | null {
     try {
       // Parse Meta WhatsApp webhook format
@@ -97,6 +106,16 @@ export class MetaProvider extends BaseProvider {
 
   getProviderName(): string {
     return 'Meta WhatsApp';
+  }
+
+  async destroy(): Promise<void> {
+    try {
+      // Meta doesn't require special cleanup
+      // Close any open connections if they exist in the future implementation
+      console.log('Meta provider destroyed');
+    } catch (error) {
+      console.error('Error destroying Meta provider:', error);
+    }
   }
 
   private async simulateApiCall(url: string, options: any): Promise<any> {

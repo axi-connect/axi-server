@@ -4,6 +4,7 @@ import qr from 'qr-image';
 import { HttpError } from '@/shared/errors/http.error.js';
 import { ChannelType, ChannelProvider } from '@prisma/client';
 import { AuthSessionService } from '../services/auth-session.service.js';
+import { ChannelRuntimeService } from '../services/channel-runtime.service.js';
 import { WhatsappProvider } from '../../infrastructure/providers/WhatsappProvider.js';
 import { ProviderHealthCheckService } from '../services/provider-health-check.service.js';
 import { ChannelEntity, CreateChannelData, UpdateChannelData } from '../../domain/entities/channel.js';
@@ -43,51 +44,37 @@ export interface ChannelSearchInput {
 }
 
 export class ChannelUseCases {
-  private authSessionService = new AuthSessionService();
+  private authSessionService: AuthSessionService;
   private healthCheckService = new ProviderHealthCheckService();
-  private whatsappProviders = new Map<string, WhatsappProvider>();
+  private runtimeService: ChannelRuntimeService;
 
   constructor(
     private channelRepository: ChannelRepositoryInterface,
-    private credentialRepository: CredentialRepositoryInterface
-  ) {}
+    private credentialRepository: CredentialRepositoryInterface,
+    runtimeService: ChannelRuntimeService,
+    authSessionService?: AuthSessionService
+  ) {
+    this.runtimeService = runtimeService;
+    this.authSessionService = authSessionService || new AuthSessionService();
+  }
 
   /**
-   * Factory method to create WhatsappProvider instances
-   * Reuses existing instances or creates new ones, cleaning up expired sessions
-   */
-  private createWhatsappProvider(channelId: string, config: any, companyId: number): WhatsappProvider {
-    const providerConfig = {
-      ...config,
-      company_id: companyId,
-      sendMessageCallback: null,
-      onMessage: null
-    };
-
-    // Check if we have an existing provider for this channel
-    const existingProvider = this.whatsappProviders.get(channelId);
-
-    if (existingProvider) {
-      // Check if the session is still active
-      const activeSession = this.authSessionService.getActiveSessionByChannel(channelId);
-      if (!activeSession) {
-        // Session expired or doesn't exist, clean up the old provider
-        console.log(`Cleaning up expired WhatsApp provider for channel ${channelId}`);
-        existingProvider.destroy().catch(error => {
-          console.error(`Error cleaning up WhatsApp provider for channel ${channelId}:`, error);
-        });
-        this.whatsappProviders.delete(channelId);
-      } else {
-        // Session is still active, return existing provider
-        return existingProvider;
-      }
+   * Obtiene instancia de WhatsappProvider desde el runtime service
+  */
+  private async getWhatsappProvider(channelId: string, config: any, companyId: number): Promise<WhatsappProvider> {
+    // Verificar si el canal está activo en runtime
+    if (!this.runtimeService.isChannelActive(channelId)) {
+      // Intentar iniciar el canal si no está activo
+      await this.runtimeService.startChannel(channelId);
     }
 
-    // Create new provider
-    const newProvider = new WhatsappProvider(providerConfig, channelId, this.authSessionService);
-    this.whatsappProviders.set(channelId, newProvider);
+    // Obtener provider desde runtime service
+    const provider = (this.runtimeService as any).activeProviders.get(channelId);
+    if (!provider || !(provider instanceof WhatsappProvider)) {
+      throw new Error(`No se pudo obtener provider WhatsApp para canal ${channelId}`);
+    }
 
-    return newProvider;
+    return provider;
   }
 
   async createChannel(input: CreateChannelInput): Promise<ChannelEntity & { authSession?: any }> {
@@ -129,7 +116,7 @@ export class ChannelUseCases {
 
   /**
    * Flujo A: Crear canal con autenticación inmediata (OAuth/Token providers)
-   */
+  */
   private async createChannelWithAuth(input: CreateChannelInput): Promise<ChannelEntity> {
     const {name, config, type, company_id, credentials, expires_at, provider_account, provider, default_agent_id} = input;
     
@@ -234,9 +221,7 @@ export class ChannelUseCases {
 
   async getChannelById(id: string): Promise<ChannelEntity> {
     const channel = await this.channelRepository.findById(id);
-    if (!channel) {
-      throw new HttpError(404, 'Channel not found');
-    }
+    if (!channel) throw new HttpError(404, 'Channel not found');
     return channel;
   }
 
@@ -305,24 +290,18 @@ export class ChannelUseCases {
     // Verificar que el canal existe y está pendiente de autenticación
     const channel = await this.channelRepository.findById(channelId);
     if (!channel) throw new HttpError(404, 'Channel not found');
-    if (channel.is_active) throw new HttpError(400, 'Channel is already active');
+    // if (channel.is_active) throw new HttpError(400, 'Channel is already active');
 
     // Generar QR usando el provider correspondiente
     let qrCode: string;
     let qrCodeUrl: string;
 
-    switch (channel.provider) {
-      case ChannelProvider.CUSTOM:
-      case ChannelProvider.DEFAULT:
-        // Usar WhatsappProvider para generar QR real de WhatsApp Web
+    // switch (channel.provider) {
+      // case ChannelProvider.CUSTOM:
+      // case ChannelProvider.DEFAULT:
+        // Usar runtime service para generar QR
         try {
-          const whatsappProvider = this.createWhatsappProvider(channelId, channel.config, channel.company_id);
-
-          // Forzar reinicialización
-          const forceReinit = true;
-
-          // Generar QR usando el provider
-          const qrResult = await whatsappProvider.generateQR(forceReinit);
+          const qrResult = await this.runtimeService.generateQR(channelId, true);
 
           if (qrResult && qrResult.length > 0) {
             const qr_image = qr.image(qrResult, {type: 'svg'});
@@ -341,10 +320,10 @@ export class ChannelUseCases {
           console.error('Error generating WhatsApp QR:', error);
           throw new HttpError(500, `Failed to generate QR code: ${error.message}`);
         }
-        break;
-      default:
-        throw new HttpError(400, `QR authentication not supported for provider: ${channel.provider}`);
-    }
+        // break;
+      // default:
+        // throw new HttpError(400, `QR authentication not supported for provider: ${channel.provider}`);
+    // }
 
     // Verificar si ya hay una sesión activa
     let authSession = this.authSessionService.getActiveSessionByChannel(channelId);
@@ -356,7 +335,9 @@ export class ChannelUseCases {
       authSession.expiresAt = new Date(Date.now() + 15 * 60 * 1000);
     }
 
-    await this.credentialRepository.update(channel.credentials_id, { credentials: authSession });
+    if (channel.credentials_id) {
+      await this.credentialRepository.update(channel.credentials_id, { credentials: authSession });
+    }
 
     return {
       qrCode,
@@ -379,21 +360,12 @@ export class ChannelUseCases {
     if (!authSession || authSession.channelId !== channelId) throw new HttpError(400, 'Invalid authentication session');
 
     // Verificar si el cliente de WhatsApp está autenticado
-    const whatsappProvider = this.createWhatsappProvider(channelId, channel.config, channel.company_id);
+    const whatsappProvider = await this.getWhatsappProvider(channelId, channel.config, channel.company_id);
     const isAuthenticated = await whatsappProvider.isAuthenticated();
     if (!isAuthenticated) throw new HttpError(400, 'WhatsApp client is not authenticated');
 
     // Completar la sesión de autenticación
     const completedSession = this.authSessionService.completeSession(sessionId, metadata);
-
-    // Limpiar la instancia del provider ya que ya no es necesaria
-    const provider = this.whatsappProviders.get(channelId);
-    if (provider) {
-      provider.destroy().catch(error => {
-        console.error(`Error cleaning up WhatsApp provider for channel ${channelId}:`, error);
-      });
-      this.whatsappProviders.delete(channelId);
-    }
 
     // Activar el canal
     const updatedChannel = await this.channelRepository.update(channelId, { is_active: true });
@@ -404,5 +376,54 @@ export class ChannelUseCases {
     }
 
     return updatedChannel;
+  }
+
+  /**
+   * Inicia un canal en runtime
+   */
+  async startChannel(channelId: string): Promise<void> {
+    await this.runtimeService.startChannel(channelId);
+  }
+
+  /**
+   * Detiene un canal en runtime
+  */
+  async stopChannel(channelId: string): Promise<void> {
+    await this.runtimeService.stopChannel(channelId);
+  }
+
+  /**
+   * Reinicia un canal en runtime
+  */
+  async restartChannel(channelId: string): Promise<void> {
+    await this.runtimeService.restartChannel(channelId);
+  }
+
+  /**
+   * Obtiene el estado de un canal
+  */
+  async getChannelStatus(channelId: string): Promise<any> {
+    return this.runtimeService.getChannelStatus(channelId);
+  }
+
+  /**
+   * Envía un mensaje a través del runtime
+  */
+  async sendMessage(channelId: string, message: any): Promise<void> {
+    await this.runtimeService.emitMessage(channelId, message);
+  }
+
+  /**
+   * Verifica si un canal está activo
+  */
+  isChannelActive(channelId: string): boolean {
+    return this.runtimeService.isChannelActive(channelId);
+  }
+
+  /**
+   * Obtiene IDs de canales activos
+  */
+  getActiveChannelIds(): string[] {
+    return this.runtimeService.getActiveChannelIds();
   }
 }

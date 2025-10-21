@@ -48,6 +48,7 @@ export interface WebhookMessage {
 export abstract class BaseProvider {
   protected config: ProviderConfig;
   protected provider: ChannelProvider;
+  protected messageHandler?: (data: any) => Promise<void>;
 
   constructor(config: ProviderConfig, provider: ChannelProvider) {
     this.config = config;
@@ -58,9 +59,23 @@ export abstract class BaseProvider {
 
   abstract validateCredentials(): Promise<boolean>;
 
+  abstract isAuthenticated(): Promise<boolean>;
+
   abstract parseWebhook(data: any): WebhookMessage | null;
 
   abstract getProviderName(): string;
+
+  abstract destroy(): Promise<void>;
+
+  setMessageHandler(handler: (data: any) => Promise<void>): void {
+    this.messageHandler = handler;
+  }
+
+  protected async emitMessage(data: any): Promise<void> {
+    if (this.messageHandler) {
+      await this.messageHandler(data);
+    }
+  }
 
   protected getConfig(): ProviderConfig {
     return this.config;

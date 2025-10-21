@@ -1,21 +1,35 @@
 import cors from "cors";
 import path from 'path';
-import "./database/redis.js";
 import dotenv from "dotenv";
 import helmet from "helmet";
 import morgan from "morgan";
 import figlet from "figlet";
+import { createServer } from 'http';
 import express, { Application } from 'express';
+import { Server as SocketIOServer } from 'socket.io';
+import { initializeRedis, getRedisClient } from "@/database/redis.js";
 import { RbacRouter } from "./modules/rbac/infrastructure/rbac.routes.js";
 import { AuthRouter } from "./modules/auth/infrastructure/auth.routes.js";
 import { LeadsRouter } from "./modules/leads/infrastructure/leads.routes.js";
 import { CatalogRouter } from "./modules/catalog/infrastructure/catalog.routes.js";
-import { ChannelsRouter } from "./modules/channels/infrastructure/routes/main.routes.js";
+// ChannelsRouter se configura dinámicamente después de la inicialización
 import { ParametersRouter } from "./modules/parameters/infrastructure/parameters.routes.js";
 import { IdentitiesRouter } from "./modules/identities/infrastructure/identities.routes.js";
+import { initializeChannelRuntime } from "@/modules/channels/infrastructure/runtime-initializer.js";
 
 const app:Application = express();
 const PORT = process.env.PORT || 3000;
+
+// Crear servidor HTTP para Socket.IO
+const server = createServer(app);
+
+// Configurar Socket.IO
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    methods: ["GET", "POST"]
+  }
+});
 
 // Middlewares
 app.use(cors());
@@ -35,18 +49,55 @@ app.use('/leads', LeadsRouter);
 app.use('/catalog', CatalogRouter);
 app.use('/identities', IdentitiesRouter);
 app.use('/parameters', ParametersRouter);
-// Channels
-app.use('/channels', ChannelsRouter);
 
-// Boot Server
-app.listen(PORT, () => {
+// Inicializar servicios de infraestructura primero
+Promise.all([
+  initializeRedis(),
+  initializeChannelRuntime(io).then((result) => {
+    // Configurar Channels router con dependencias inicializadas
+    app.use('/channels', result.channelsRouter);
+    console.log('📡 Channels router configurado');
+  })
+]).then(() => {
+  console.log('🚀 Todos los servicios de infraestructura inicializados');
+}).catch((error) => {
+  console.error('❌ Error inicializando servicios de infraestructura:', error);
+  process.exit(1);
+});
+
+// Boot Server (esperar inicialización de servicios)
+server.listen(PORT, async () => {
   figlet("axi connect", {font: "Standard", horizontalLayout: "full"}, (err, data)=>{
     console.log(`\x1b[31m${data}\x1b[0m`);
     console.log("\x1b[32m------------- BIENVENIDO AL FUTURO DEL SERVICIO AL CLIENTE -------------\x1b[0m");
   });
 
-  console.log(`Server is listening on port ${PORT}`);
+  console.log(`🚀 Server is listening on port ${PORT}`);
+  console.log(`🔌 WebSocket server ready for real-time communication`);
 }).on('error', (error) => {
   console.error('Error starting the server:', error);
   process.exit(1);
 });
+
+// Graceful shutdown
+const gracefulShutdown = async (signal: string) => {
+  console.log(`🛑 Recibiendo ${signal}, cerrando servidor y servicios...`);
+
+  try {
+    // Cerrar cliente Redis
+    const redisClient = getRedisClient();
+    await redisClient.disconnect();
+
+    // Cerrar servidor HTTP/Socket.IO
+    server.close(() => {
+      console.log('✅ Servidor cerrado correctamente');
+      process.exit(0);
+    });
+  } catch (error) {
+    console.error('❌ Error durante el cierre graceful:', error);
+    process.exit(1);
+  }
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

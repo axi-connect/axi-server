@@ -171,6 +171,21 @@ export class ChannelRepository implements ChannelRepositoryInterface {
     }
   }
 
+  async findActiveChannels(): Promise<ChannelEntity[]> {
+    const channels = await this.prisma.channel.findMany({
+      where: {
+        is_active: true,
+        deleted_at: null
+      },
+      include: {
+        credentials: true,
+        company: true
+      }
+    });
+
+    return channels.map(channel => this.mapToEntity(channel));
+  }
+
   private mapToEntity(channel: any): ChannelEntity {
     return {
       id: channel.id,

@@ -65,6 +65,15 @@ export class TwilioProvider extends BaseProvider {
     }
   }
 
+  async isAuthenticated(): Promise<boolean> {
+    try {
+      // For Twilio, authentication is validated via credentials
+      return await this.validateCredentials();
+    } catch {
+      return false;
+    }
+  }
+
   parseWebhook(data: any): WebhookMessage | null {
     try {
       // Parse Twilio webhook format
@@ -88,6 +97,16 @@ export class TwilioProvider extends BaseProvider {
 
   getProviderName(): string {
     return 'Twilio';
+  }
+
+  async destroy(): Promise<void> {
+    try {
+      // Twilio doesn't require special cleanup
+      // Close any open connections if they exist in the future implementation
+      console.log('Twilio provider destroyed');
+    } catch (error) {
+      console.error('Error destroying Twilio provider:', error);
+    }
   }
 
   private async simulateApiCall(url: string, options: any): Promise<any> {

@@ -16,12 +16,14 @@ export const ChannelsRouter = Router();
 // Apply authentication middleware to all routes
 ChannelsRouter.use(authenticate);
 
-// Create and mount modular routers
-// /channels/*
-ChannelsRouter.use('/', createChannelRouter(prisma));          
-// /channels/conversations/*
-ChannelsRouter.use('/conversations', createConversationRouter(prisma)); 
-// /channels/messages/*
-ChannelsRouter.use('/messages', createMessageRouter(prisma));  
+// Create and mount modular routers with proper dependency injection
+export function initializeChannelsRouter() {
+    // /channels/*
+    ChannelsRouter.use('/', createChannelRouter());
+    // /channels/messages/*
+    ChannelsRouter.use('/messages', createMessageRouter(prisma));
+    // /channels/conversations/*
+    ChannelsRouter.use('/conversations', createConversationRouter(prisma));
 
-export default ChannelsRouter;
+    return ChannelsRouter;
+}
