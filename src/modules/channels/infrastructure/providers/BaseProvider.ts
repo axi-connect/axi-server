@@ -1,13 +1,15 @@
 import { ChannelProvider } from '@prisma/client';
+import { WebSocketEvent } from '../../domain/entities/channel.js';
 
 export interface ProviderConfig {
   apiKey?: string;
   apiSecret?: string;
-  accessToken?: string;
-  webhookUrl?: string;
-  phoneNumberId?: string;
-  accountSid?: string;
   authToken?: string;
+  accountSid?: string;
+  webhookUrl?: string;
+  accessToken?: string;
+  phoneNumberId?: string;
+  emitEventCallback: (event: WebSocketEvent) => void;
   [key: string]: any;
 }
 
@@ -72,9 +74,7 @@ export abstract class BaseProvider {
   }
 
   protected async emitMessage(data: any): Promise<void> {
-    if (this.messageHandler) {
-      await this.messageHandler(data);
-    }
+    if (this.messageHandler) await this.messageHandler(data);
   }
 
   protected getConfig(): ProviderConfig {

@@ -22,8 +22,14 @@ El módulo sigue los principios de **Clean Architecture** y **Hexagonal Architec
 ```
 src/modules/channels/
 ├── application/
-│   └── use-cases/           # Lógica de negocio (Use Cases)
-│       ├── channel.usecases.ts
+│   ├── services/            # Servicios de aplicación
+│   │   ├── channel-runtime.service.ts     # ⚡ Gestión de providers activos
+│   │   ├── channel-websocket.gateway.ts   # 🔌 Gateway WebSocket bidireccional
+│   │   ├── auth-session.service.ts         # 🔐 Gestión de sesiones con Redis
+│   │   └── provider-health-check.service.ts # 🩺 Validación de credenciales
+│   └── use-cases/           # Lógica de negocio (Use Cases) - Refactorizado
+│       ├── channel.usecases.ts             # 📋 Operaciones CRUD básicas de canales
+│       ├── channel-auth.usecases.ts        # 🔐 Lógica completa de autenticación
 │       ├── message.usecases.ts
 │       ├── conversation.usecases.ts
 │       ├── channel-credential.usecases.ts
@@ -51,15 +57,18 @@ src/modules/channels/
 │   │   ├── conversation.repository.ts
 │   │   └── credential.repository.ts
 │   ├── routes/                    # Configuración de rutas
-│   │   ├── main.route.ts          # 📍 Archivo principal/orquestador
+│   │   ├── main.routes.ts          # 📍 Archivo principal/orquestador
 │   │   ├── channel.routes.ts      # Rutas específicas de channels
 │   │   ├── message.routes.ts      # Rutas específicas de messages
 │   │   └── conversation.routes.ts # Rutas específicas de conversations
-│   └── providers/           # Proveedores de canales externos
-│       ├── BaseProvider.ts
-│       ├── MetaProvider.ts
-│       ├── TwilioProvider.ts
-│       └── CustomProvider.ts
+│   ├── providers/           # Proveedores de canales externos
+│   │   ├── BaseProvider.ts
+│   │   ├── WhatsappProvider.ts    # 🟢 WhatsApp Web con manejo EBUSY
+│   │   ├── MetaProvider.ts
+│   │   ├── TwilioProvider.ts
+│   │   └── CustomProvider.ts
+│   ├── channels.container.ts       # 🏗️ Contenedor de dependencias
+│   └── runtime-initializer.ts      # 🚀 Inicializador del runtime layer
 ├── shared/
 │   ├── dtos/                # Data Transfer Objects
 │   │   └── channel.dto.ts
@@ -68,6 +77,147 @@ src/modules/channels/
 ├── openapi.yaml             # 📖 Documentación OpenAPI
 └── README.md                # 📋 Esta documentación
 ```
+
+### **🏗️ Arquitectura Implementada**
+
+#### **1. ✅ ChannelRuntimeService**
+- **Función**: Servicio central que gestiona el ciclo de vida de los providers activos
+- **Características**:
+  - Mapa en memoria de providers activos (`activeProviders: Map<string, BaseProvider>`)
+  - Inicialización automática de canales activos al arranque del backend (`initializeActiveChannels()`)
+  - Métodos principales: `startChannel()`, `stopChannel()`, `restartChannel()`, `getChannelStatus()`, `emitMessage()`
+  - Integración con WebSocket para eventos en tiempo real
+  - Manejo robusto de errores y limpieza automática de recursos
+  - Factory method para instanciar providers según tipo (`createProviderInstance()`)
+
+#### **2. ✅ ChannelWebSocketGateway**
+- **Función**: Gateway bidireccional para comunicación en tiempo real con el frontend
+- **Características**:
+  - Conexiones organizadas por compañía y canal (`companyConnections`, `connections`)
+  - Eventos WebSocket soportados:
+    - `channel.status.updated` - Cambios de estado del canal
+    - `channel.message.received` - Mensajes entrantes
+    - `channel.auth.required` - Requiere autenticación
+    - `channel.disconnected` - Desconexión del provider
+    - `channel.authenticated` - Canal Autenticado
+    - `channel.auth_failure` - Fallo de autenticación
+  - Autenticación de conexiones con validación de `companyId`
+  - Reconexión automática y manejo graceful de desconexiones
+  - Integración con Socket.IO para salas y presencia en tiempo real
+  - Estadísticas de conexiones (`getStats()`)
+
+#### **3. ✅ AuthSessionService**
+- **Función**: Gestión de sesiones de autenticación con persistencia en Redis
+- **Características**:
+  - Integración completa con Redis para almacenamiento de sesiones serializadas
+  - Métodos de persistencia: `saveSerializedSession()`,`getSerializedSession()`, `deleteSerializedSession()`
+  - Recuperación automática de sesiones al reinicio del backend
+  - Evita re-escanear QR después de reinicios del sistema
+  - Gestión de expiración de sesiones con limpieza automática
+  - Map en memoria con respaldo en Redis para alta performance
+
+#### **4. ✅ ChannelsContainer (Dependency Injection)**
+- **Función**: Contenedor singleton para gestión centralizada de dependencias
+- **Características**:
+  - Patrón Singleton para instancia única global
+  - Inicialización ordenada de todos los servicios (`initialize()`)
+  - Gestión del ciclo de vida completo (`shutdown()`)
+  - Inyección automática de dependencias entre servicios
+  - Método `updateWebSocketGateway()` para reconexión de WebSocket
+  - Acceso controlado a servicios a través de getters
+
+#### **5. ✅ RuntimeInitializer**
+- **Función**: Orquestador de inicialización del Channel Runtime Layer
+- **Características**:
+  - Inicialización secuencial y ordenada de todos los componentes
+  - Configuración automática de WebSocket Gateway con runtime service
+  - Inicialización de canales activos al arranque
+  - Manejo de errores durante inicialización (no bloqueante)
+  - Setup de señales de limpieza del sistema (`SIGTERM`, `SIGINT`)
+  - Exposición global del contenedor para acceso desde rutas
+
+#### **6. ✅ Providers (Sistema de Proveedores)**
+
+##### **BaseProvider (Clase Base Abstracta)**
+- **Métodos estándar**:
+  - `isAuthenticated()`: Verifica estado de autenticación actual
+  - `destroy()`: Limpieza completa de recursos y conexiones
+  - `setMessageHandler()`: Configuración de callback para mensajes entrantes
+  - `emitMessage()`: Emisión de mensajes al runtime service
+  - `validateCredentials()`: Validación de credenciales con el provider
+
+##### **WhatsappProvider (WhatsApp Web con manejo avanzado)**
+- **Características avanzadas**:
+  - **Manejo robusto de EBUSY**: Detección y limpieza automática de sesiones corruptas
+  - **Eventos críticos**: `disconnected`, `auth_failure` con notificación WebSocket
+  - **Recuperación automática**: Restauración de sesiones desde Redis
+  - **Limpieza de sesiones**: `handleSessionCleanup()` para resolución de conflictos
+  - **Reconexión inteligente**: Verificación de conexión antes de enviar mensajes
+  - **Timeouts y debouncing**: Optimización de procesamiento de mensajes
+  - **Restauración de sesiones**: Evita re-escanear QR después de reinicios
+
+##### **Otros Providers**
+- **MetaProvider**: Soporte para WhatsApp Business API (OAuth/Token)
+- **TwilioProvider**: Implementación básica para SMS/WhatsApp Business
+- **CustomProvider**: Flexibilidad para integraciones personalizadas
+
+#### **7. ✅ Arquitectura de Rutas Modular**
+- **Función**: Sistema modular y escalable de gestión de rutas
+- **Características**:
+  - Rutas separadas por entidad: `channel.routes.ts`, `message.routes.ts`, `conversation.routes.ts`
+  - Factory functions con inyección de dependencias
+  - `main.routes.ts` como orquestador central
+  - Inicialización lazy con contenedor de dependencias
+  - Middleware de autenticación y autorización integrado
+
+#### **7. ✅ Arquitectura de Casos de Uso Modular**
+- **ChannelUseCases**: Operaciones CRUD básicas de canales (leer, actualizar, eliminar)
+- **ChannelAuthUseCases**: Lógica especializada de autenticación y creación de canales
+- **Separación clara**: Autenticación ≠ Operaciones CRUD
+- **Delegación inteligente**: `ChannelUseCases` delega autenticación a `ChannelAuthUseCases`
+- **Principio SRP**: Single Responsibility Principle aplicado
+
+#### **8. ✅ Mejoras de Tipos y Validación**
+- **ChannelEntity**: `credentials_id` ahora nullable para reflejar realidad de BD
+- **Validaciones Joi**: Esquemas robustos para todos los endpoints
+- **Type Safety**: Eliminación de tipos `any` y uso de interfaces específicas
+- **Error Handling**: Respuestas consistentes con `HttpError` personalizado
+- **Repository Pattern**: Abstracción completa de acceso a datos
+
+#### **9. ✅ RedisClient Mejorado**
+- **Función**: Cliente Redis centralizado y robusto
+- **Características**:
+  - Patrón Singleton para instancia única
+  - Reconexión automática y manejo de errores
+  - Métodos completos: `setEx()`, `get()`, `del()`, `exists()`, `keys()`, etc.
+  - Pub/Sub support con cleanup automático
+  - Timeout configurables y gestión de concurrencia
+  - Logging detallado para debugging
+
+#### **10. ✅ Eventos del Sistema en Tiempo Real**
+- **Tipos de eventos emitidos**:
+  - `channel.status.updated` - Estado del canal cambió
+  - `channel.message.received` - Nuevo mensaje entrante
+  - `channel.auth.required` - Se requiere autenticación
+  - `channel.disconnected` - Canal desconectado del provider (LOGOUT desde dispositivo)
+  - `channel.auth_failure` - Fallo de autenticación
+  - `channel.disconnect_error` - Error durante desconexión (manejo robusto)
+  - `channel.auth_failure_error` - Error durante fallo de autenticación
+  - `channel.session_cleaned` - Sesión limpiada exitosamente después de desconexión
+  - `channel.started` - Canal iniciado exitosamente
+  - `channel.stopped` - Canal detenido
+
+- **Manejo robusto de errores**: Los eventos se emiten con timeouts y manejo de excepciones para evitar desconexiones de WebSocket
+
+#### **11. ✅ Recuperación de Errores Avanzada**
+- **Manejo de EBUSY**: Sesiones corruptas detectadas y limpiadas automáticamente
+- **ProtocolError de Puppeteer**: Errores `Target closed`, `Session closed` manejados gracefully
+- **Timeouts en operaciones**: `Promise.race` para evitar operaciones colgadas
+- **Reconexión automática**: Intento de reconexión antes de enviar mensajes
+- **Limpieza de recursos**: Liberación automática de timers, conexiones y memoria
+- **Persistencia de estado**: Sesiones guardadas en Redis para recuperación
+- **Eventos de error**: Notificación inmediata al frontend sin desconectar WebSocket
+- **Estado local prioritario**: Limpieza inmediata del estado interno antes de operaciones externas
 
 ## 🚀 API Endpoints
 
@@ -259,13 +409,29 @@ Content-Type: application/json
 }
 ```
 
-**Obtener QR para autenticación**:
+### 🔄 **Recuperación Automática de Sesiones**
+Para proveedores como WhatsApp Web, el sistema implementa **recuperación automática** de sesiones:
+
+#### Restauración de Sesión Existente
 ```bash
 GET /channels/{channelId}/qr
 Authorization: Bearer <your-jwt-token>
 ```
 
-**Respuesta con QR real de WhatsApp Web**:
+Si existe una sesión válida en Redis, el sistema la restaura automáticamente:
+```json
+{
+  "successful": true,
+  "message": "Session restored successfully",
+  "data": {
+    "sessionRestored": true,
+    "channelId": "uuid",
+    "status": "authenticated"
+  }
+}
+```
+
+#### Generación de Nuevo QR (cuando no hay sesión válida)
 ```json
 {
   "successful": true,
@@ -278,15 +444,41 @@ Authorization: Bearer <your-jwt-token>
 }
 ```
 
-**Refrescar QR después de expiración**:
-Si la sesión de autenticación expira antes de que el usuario complete el proceso, puedes llamar nuevamente al endpoint `GET /channels/{id}/qr` para generar un nuevo código QR. El sistema automáticamente:
+### 🚨 **Manejo Avanzado de Errores**
 
-- Detecta que la sesión anterior expiró
-- Limpia la instancia anterior del navegador
-- Crea una nueva sesión de autenticación
-- Genera un QR fresco para escanear
+#### Recuperación Automática de EBUSY
+Cuando ocurre el error `EBUSY: resource busy or locked`, el sistema:
 
-> **Nota**: El sistema maneja automáticamente la limpieza de sesiones expiradas y reinicialización de instancias de WhatsApp para evitar conflictos con Puppeteer.
+1. **Detecta el error** automáticamente
+2. **Limpia la sesión corrupta** de Redis y memoria
+3. **Destruye la instancia anterior** (si existe)
+4. **Notifica al WebSocket** del evento `channel.disconnected`
+5. **Permite regenerar QR** sin desconectar al usuario
+
+```bash
+# El usuario puede llamar inmediatamente:
+GET /channels/{channelId}/qr
+# Sistema responde con nuevo QR limpio
+```
+
+#### Eventos de Sistema en Tiempo Real
+El sistema emite eventos WebSocket para mantener sincronizado al frontend:
+
+- `channel.disconnected` - Canal desconectado del provider
+- `channel.auth_failure` - Fallo de autenticación detectado
+- `channel.status.updated` - Cambio de estado del canal
+- `channel.message.received` - Mensaje entrante procesado
+
+#### Reconexión Inteligente
+Antes de enviar mensajes, el sistema verifica la conexión:
+```typescript
+// Verificación automática antes de enviar
+if (!this.client?.info?.wid?.user) {
+  // Intenta reconectar automáticamente
+  await this.client.initialize();
+  await new Promise(resolve => setTimeout(resolve, 2000));
+}
+```
 
 ### 🔓 **Fase B: Autenticación** (Activación del Canal)
 Proceso de login/autenticación para canales que lo requieren.
@@ -411,21 +603,36 @@ TWILIO_AUTH_TOKEN="your-twilio-token"
 
 ## 🔌 Proveedores Soportados
 
+### WhatsApp Web (CUSTOM Provider) - 🟢 **Implementación Avanzada**
+- ✅ **Autenticación QR** con recuperación automática
+- ✅ **Manejo robusto de EBUSY** - Sesiones corruptas detectadas y limpiadas
+- ✅ **Restauración de sesiones** desde Redis (evita re-escanear QR)
+- ✅ **Eventos críticos** (`disconnected`, `auth_failure`) con notificación WebSocket
+- ✅ **Reconexión inteligente** antes de enviar mensajes
+- ✅ **Limpieza automática** de recursos y memoria
+- ✅ **Timeouts y debouncing** para optimización de mensajes
+- ✅ **Persistencia de estado** entre reinicios del servidor
+
 ### Meta (WhatsApp Business API)
 - ✅ Envío de mensajes de texto
 - ✅ Recepción de mensajes vía webhooks
 - ✅ Soporte para templates
 - ✅ Manejo de multimedia
+- ✅ Autenticación OAuth automática
+- ✅ Activación inmediata del canal
 
 ### Twilio
 - ✅ SMS y WhatsApp
 - ✅ Llamadas telefónicas
 - ✅ Verificación de números
+- ✅ Autenticación por API Key
+- ✅ Webhooks configurables
 
 ### Custom Provider
 - ✅ Integración flexible
 - ✅ Webhooks personalizados
 - ✅ Protocolos customizados
+- ✅ Extensible para cualquier proveedor
 
 ## 🧪 Desarrollo y Testing
 
@@ -532,13 +739,30 @@ src/modules/channels/
 
 ## 🔮 Roadmap
 
-### Próximas Funcionalidades
-- [ ] **Webhooks avanzados** con retry automático
-- [ ] **Plantillas de mensajes** predefinidas
-- [ ] **Broadcast messaging** masivo
-- [ ] **Análisis de conversaciones** con IA
-- [ ] **Integración con CRM** externa
-- [ ] **Soporte para más proveedores** (Telegram, Instagram, etc.)
+### ✅ **Funcionalidades Implementadas**
+- [x] **Channel Runtime Layer** - Gestión de sesiones activas y providers
+- [x] **WebSocket Gateway** - Comunicación bidireccional en tiempo real
+- [x] **Auth Session Service** - Persistencia de sesiones en Redis
+- [x] **Manejo de EBUSY** - Recuperación automática de sesiones corruptas
+- [x] **Eventos críticos** - Notificación de desconexiones y errores
+- [x] **Dependency Injection** - Arquitectura de contenedor centralizado
+- [x] **Arquitectura modular** - Rutas separadas por entidad
+- [x] **Recuperación de sesiones** - Restauración automática desde Redis
+- [x] **Validación robusta** - Joi schemas para todos los endpoints
+- [x] **Refactorización modular** - Separación ChannelUseCases ↔ ChannelAuthUseCases
+
+### 🚧 **Próximas Funcionalidades**
+- [ ] **Webhooks avanzados** con retry automático y circuit breaker
+- [ ] **Plantillas de mensajes** predefinidas con variables dinámicas
+- [ ] **Broadcast messaging** masivo con rate limiting
+- [ ] **Análisis de conversaciones** con IA integrada
+- [ ] **Integración con CRM** externa vía APIs REST
+- [ ] **Soporte para más proveedores** (Telegram, Instagram, Messenger)
+- [ ] **Message queuing** con RabbitMQ para alta escalabilidad
+- [ ] **Dashboard de métricas** en tiempo real
+- [ ] **Backup y restore** de configuraciones de canal
+- [ ] **Multi-tenancy avanzado** con aislamiento de datos
+- [ ] **Load balancing** para múltiples instancias de providers
 
 ---
 

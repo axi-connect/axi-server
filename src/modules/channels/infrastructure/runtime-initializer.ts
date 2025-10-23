@@ -1,28 +1,30 @@
+import { Router } from 'express';
 import { Server as SocketIOServer } from 'socket.io';
-import { createChannelsContainer } from './channels.container.js';
+import { ChannelsContainer } from './channels.container.js';
+import { type ChannelWebSocketGateway } from '../application/services/channel-websocket.gateway.js';
 
 /**
  * Inicializa el Channel Runtime Layer
  * Configura todos los servicios necesarios para mensajería bidireccional
 */
 export async function initializeChannelRuntime(io: SocketIOServer): Promise<{
-  container: any;
-  channelsRouter: any;
-  webSocketGateway: any;
+  channelsRouter: Router;
+  container: ChannelsContainer;
+  webSocketGateway: ChannelWebSocketGateway;
 }> {
   console.log('🔧 Inicializando Channel Runtime Layer...');
 
   // Crear contenedor de dependencias centralizado
-  const container = createChannelsContainer(io);
+  const container = ChannelsContainer.create(io);
   const webSocketGateway = container.getWebSocketGateway();
 
   // Inicializar canales activos automáticamente
-  try {
-    await container.initializeActiveChannels();
-    console.log('✅ Canales activos inicializados');
-  } catch (error) {
-    console.error('⚠️ Error inicializando canales activos, continuando...', error);
-  }
+  // try {
+  //   await container.initializeActiveChannels();
+  //   console.log('✅ Canales activos inicializados');
+  // } catch (error) {
+  //   console.error('⚠️ Error inicializando canales activos, continuando...', error);
+  // }
 
   // Configurar limpieza al cerrar aplicación
   const cleanup = async () => {

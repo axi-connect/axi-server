@@ -101,8 +101,6 @@ export class ChannelWebSocketGateway {
   */
   private async handleChannelStatusRequest(socket: Socket, data: { channelId: string }): Promise<void> {
     try {
-      console.log('handleChannelStatusRequest', data);
-      console.log('type of data', typeof data);
       const { channelId } = data;
 
       if (!channelId) {
@@ -175,18 +173,14 @@ export class ChannelWebSocketGateway {
       }
 
       // Registrar conexión por canal
-      if (!this.connections.has(channelId)) {
-        this.connections.set(channelId, new Set());
-      }
+      if (!this.connections.has(channelId)) this.connections.set(channelId, new Set());
       this.connections.get(channelId)!.add(socket);
 
       // Unir socket a sala de canal
       socket.join(`channel_${channelId}`);
-
       socket.emit('joined_channel', { channelId });
 
       console.log(`📱 Socket ${socket.id} se unió al canal ${channelId}`);
-
     } catch (error) {
       console.error('Error uniendo a canal:', error);
       socket.emit('error', { message: 'Error uniendo a canal' });
@@ -274,7 +268,7 @@ export class ChannelWebSocketGateway {
   */
   handleWebSocketEvent(event: WebSocketEvent): void {
     const { event: eventName, channelId, companyId, data, timestamp } = event;
-
+    console.log('handleWebSocketEvent', event);
     // Emitir a canal específico
     if (channelId) {
       this.emitToChannel(channelId, eventName, { data, timestamp });

@@ -6,19 +6,16 @@ import { BaseProvider, ProviderConfig, MessagePayload, ProviderResponse, Webhook
 const { Client, LocalAuth } = pkg;
 
 export class WhatsappProvider extends BaseProvider {
-  private readonly channelId: string;
   private authenticated: boolean = false;
-  private authSessionService: AuthSessionService;
   private client: InstanceType<typeof Client> | null = null;
   private messageTimers: Map<string, NodeJS.Timeout> = new Map();
 
-  constructor(config: ProviderConfig, channelId: string, authSessionService: AuthSessionService) {
+  constructor(
+    config: ProviderConfig, 
+    private readonly channelId: string,
+    private readonly authSessionService: AuthSessionService
+  ) {
     super(config, ChannelProvider.CUSTOM);
-    this.channelId = channelId;
-    this.authSessionService = authSessionService;
-
-    // Configurar manejadores de eventos críticos
-    this.setupCriticalEventHandlers();
   }
 
   /**
@@ -46,28 +43,106 @@ export class WhatsappProvider extends BaseProvider {
   }
 
   /**
-   * Reinicia completamente el cliente de WhatsApp
-   */
-  async reinitialize(): Promise<void> {
-    console.log(`Forcing reinitialization of WhatsApp client for channel ${this.channelId}`);
+   * Setup event handlers for incoming messages
+  */
+  private setupEventHandlers(): void {
+    if (!this.client) return;
 
-    // Destruir cliente existente
-    if (this.client) {
+    // Manejar desconexión del dispositivo con manejo robusto de errores
+    this.client.on('disconnected', async (reason: string) => {
       try {
-        await this.client.destroy();
-      } catch (error) {
-        console.error(`Error destroying client for channel ${this.channelId}:`, error);
+        console.log(`WhatsApp disconnected for channel ${this.channelId}:`, reason);
+        await this.destroy();
+
+        this.config.emitEventCallback({
+          event: 'channel.disconnected',
+          channelId: this.channelId,
+          companyId: this.config.company_id,
+          data: { reason },
+          timestamp: new Date()
+        });
+ 
+        await this.handleSessionCleanup();
+
+      } catch (error: any) {
+        console.error(`❌ Error crítico en evento 'disconnected' para canal ${this.channelId}:`, error);
+
+        // Asegurar limpieza mínima del estado incluso en caso de error total
+        this.client = null;
+        this.authenticated = false;
+
+        this.config.emitEventCallback({
+          event: 'channel.disconnected',
+          channelId: this.channelId,
+          companyId: this.config.company_id,
+          data: { reason: error.message },
+          timestamp: new Date()
+        });
       }
-    }
+    });
 
-    // Resetear estado
-    this.client = null;
+    // Manejar errores críticos
+    this.client.on('auth_failure', async (msg: string) => {
+      console.error(`WhatsApp auth failure for channel ${this.channelId}:`, msg);
+      this.authenticated = false;
 
-    // Limpiar timers
-    for (const timer of this.messageTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.messageTimers.clear();
+      this.config.emitEventCallback({
+        event: 'channel.disconnected',
+        channelId: this.channelId,
+        companyId: this.config.company_id,
+        data: { reason: msg },
+        timestamp: new Date()
+      });
+    });
+
+    // Manejar mensajes entrantes
+    this.client.on('message', async (message: any) => {
+      try {
+        // Filter out status messages and group messages
+        if (message.isStatus || message.from.includes('@g.us')) return
+
+        const contact = await message.getContact();
+        const contactId = contact.id._serialized;
+        const contactInfo = {
+          id: contactId,
+          name: contact.name || contact.pushname || 'Unknown',
+          number: contact.number,
+          company_id: this.config.company_id
+        };
+
+        // Handle message processing with debouncing
+        const timerKey = contactId;
+        if (this.messageTimers.has(timerKey)) {
+          clearTimeout(this.messageTimers.get(timerKey)!);
+        }
+
+        const timer = setTimeout(async () => {
+        this.messageTimers.delete(timerKey);
+
+        // Process the message through the configured message handler
+        if (this.config.onMessage) {
+          await this.config.onMessage({
+          contact: contactInfo,
+          message: message.body,
+          current_message: message,
+          channelId: this.channelId
+          });
+        }
+        }, 1000); // 1 second debounce
+
+        this.messageTimers.set(timerKey, timer);
+      } catch (error) {
+        console.error('Error processing WhatsApp message:', error);
+      }
+    });
+
+    process.on('unhandledRejection', (error: any) => {
+      if (error.message.includes('Protocol error') && error.message.includes('Session closed')) {
+        console.warn('Suppressed Puppeteer error:', error.message);
+        return;
+      }
+      // throw error;
+    });
   }
 
   async sendMessage(payload: MessagePayload): Promise<ProviderResponse> {
@@ -155,209 +230,98 @@ export class WhatsappProvider extends BaseProvider {
   /**
    * Genera código QR para autenticación de WhatsApp Web
    */
-  async generateQR(forceReinit: boolean = false): Promise<string> {
+  async generateQR(): Promise<string> {
     try {
-      // Si hay sesión corrupta detectada, limpiarla primero
-      if (forceReinit) {
-        console.log(`🔄 Forzando reinicialización para canal ${this.channelId}`);
-        await this.handleSessionCleanup();
-      }
-
       // Si ya está autenticado, no generar QR
       if (this.authenticated && this.client?.info?.wid?.user) {
         console.log(`✅ Canal ${this.channelId} ya está autenticado`);
         return '';
       }
 
-      // Intentar restaurar sesión existente si no está forzando reinicialización
-      if (!forceReinit) {
-        try {
-          const hasSession = await this.authSessionService.restoreSession(this.channelId);
-          if (hasSession && this.client?.info?.wid?.user) {
-            console.log(`🔄 Sesión restaurada exitosamente para canal ${this.channelId}`);
-            this.authenticated = true;
-            return '';
-          }
-        } catch (error) {
-          console.log(`⚠️ Error restaurando sesión para canal ${this.channelId}, continuando con QR...`);
-        }
-      }
+      console.log(`🔄 Forzando reinicialización para canal ${this.channelId}`);
+      // Forzar destrucción del cliente
+      await this.destroy();
 
       // Asegurarse de que el cliente esté inicializado
       await this.ensureClient();
 
-    // Generar QR con timeout
-    return new Promise((resolve, reject) => {
-      let resolved = false;
-      const timeout = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          reject(new Error('QR generation timeout'));
-        }
-      }, 30000);
-
-      // Eventos de una sola vez
-      const cleanup = () => {
-        clearTimeout(timeout);
-        resolved = true;
-      };
-
-      this.client!.once('qr', (qr: string) => {
-        console.log(`📱 QR generado para canal ${this.channelId}`);
-        cleanup();
-        resolve(qr);
-      });
-
-      this.client!.once('authenticated', () => {
-        console.log(`✅ WhatsApp autenticado para canal ${this.channelId}`);
-        this.authenticated = true;
-        cleanup();
-        resolve('');
-      });
-
-      this.client!.once('ready', () => {
-        console.log(`🚀 WhatsApp listo para canal ${this.channelId}`);
-        this.authenticated = true;
-        cleanup();
-        resolve('');
-      });
-
-      this.client!.once('auth_failure', (error) => {
-        console.error(`❌ Fallo de autenticación para canal ${this.channelId}:`, error);
-        this.authenticated = false;
-        cleanup();
-        reject(error);
-      });
-
-      // Inicializar con manejo de errores EBUSY
-      this.client!.initialize().catch(async (error: any) => {
-        console.error(`❌ Error inicializando cliente para canal ${this.channelId}:`, error);
-
-        // Si es error EBUSY, intentar limpiar la sesión
-        if (error.message && error.message.includes('EBUSY')) {
-          console.log(`🔧 Error EBUSY detectado, limpiando sesión para canal ${this.channelId}`);
-          try {
-            await this.handleSessionCleanup();
-            cleanup();
-            reject(new Error('Session corrupted, please try again'));
-          } catch (cleanupError) {
-            console.error('Error during session cleanup:', cleanupError);
-            cleanup();
-            reject(error); // Rechazar con el error original
+      // Generar QR con timeout
+      return new Promise((resolve, reject) => {
+        let resolved = false;
+        const timeout = setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            reject(new Error('QR generation timeout'));
           }
-        } else {
+        }, 30000);
+
+        // Eventos de una sola vez
+        const cleanup = () => {
+          clearTimeout(timeout);
+          resolved = true;
+        };
+
+        this.client!.once('qr', (qr: string) => {
+          console.log(`📱 QR generado para canal ${this.channelId}`);
+          cleanup();
+          resolve(qr);
+        });
+
+        this.client!.once('authenticated', async () => {
+          console.log(`✅ WhatsApp autenticado para canal ${this.channelId}`);
+          this.authenticated = true;
+          this.config.emitEventCallback({
+            event: 'channel.authenticated',
+            channelId: this.channelId,
+            companyId: this.config.company_id,
+            data: { reason: 'authenticated' },
+            timestamp: new Date()
+          });
+
+          cleanup();
+          resolve('');
+        });
+
+        this.client!.once('ready', () => {
+          console.log(`🚀 WhatsApp listo para canal ${this.channelId}`);
+          this.authenticated = true;
+          cleanup();
+          resolve('');
+        });
+
+        this.client!.once('auth_failure', (error) => {
+          console.error(`❌ Fallo de autenticación para canal ${this.channelId}:`, error);
+          this.authenticated = false;
           cleanup();
           reject(error);
-        }
-      });
-    });
+        });
 
+        // Inicializar con manejo de errores EBUSY
+        this.client!.initialize().catch(async (error: any) => {
+          console.error(`❌ Error inicializando cliente para canal ${this.channelId}:`, error);
+
+          // Si es error EBUSY, intentar limpiar la sesión
+          if (error.message && error.message.includes('EBUSY')) {
+            console.log(`🔧 Error EBUSY detectado, limpiando sesión para canal ${this.channelId}`);
+            try {
+              await this.handleSessionCleanup();
+              cleanup();
+              reject(new Error('Session corrupted, please try again'));
+            } catch (cleanupError) {
+              console.error('Error during session cleanup:', cleanupError);
+              cleanup();
+              reject(error); // Rechazar con el error original
+            }
+          } else {
+            cleanup();
+            reject(error);
+          }
+        });
+      });
     } catch (error: any) {
       console.error(`Error en generateQR para canal ${this.channelId}:`, error);
       throw error;
     }
-  }
-
-  /**
-   * Configura manejadores de eventos críticos para errores del sistema
-   */
-  private setupCriticalEventHandlers(): void {
-    // No hay cliente aún, se configurará cuando se cree
-  }
-
-  /**
-   * Setup event handlers for incoming messages
-  */
-  private setupEventHandlers(): void {
-    if (!this.client) return;
-
-    // Manejar desconexión del dispositivo
-    this.client.on('disconnected', async (reason: string) => {
-      console.log(`WhatsApp disconnected for channel ${this.channelId}:`, reason);
-      this.authenticated = false;
-
-      // Emitir evento de desconexión
-      await this.emitMessage({
-        type: 'system',
-        event: 'disconnected',
-        reason,
-        timestamp: new Date()
-      });
-
-      // Intentar limpiar la sesión corrupta
-      try {
-        await this.handleSessionCleanup();
-      } catch (error) {
-        console.error(`Error cleaning session for channel ${this.channelId}:`, error);
-      }
-    });
-
-    // Manejar errores críticos
-    this.client.on('auth_failure', async (msg: string) => {
-      console.error(`WhatsApp auth failure for channel ${this.channelId}:`, msg);
-      this.authenticated = false;
-
-      await this.emitMessage({
-        type: 'system',
-        event: 'auth_failure',
-        message: msg,
-        timestamp: new Date()
-      });
-    });
-
-    this.client.on('message', async (message: any) => {
-      try {
-        // Filter out status messages and group messages
-        if (message.isStatus || message.from.includes('@g.us')) return
-
-        const contact = await message.getContact();
-        const contactId = contact.id._serialized;
-        const contactInfo = {
-          id: contactId,
-          name: contact.name || contact.pushname || 'Unknown',
-          number: contact.number,
-          company_id: this.config.company_id
-        };
-
-        // Handle message processing with debouncing
-        const timerKey = contactId;
-        if (this.messageTimers.has(timerKey)) {
-          clearTimeout(this.messageTimers.get(timerKey)!);
-        }
-
-        const timer = setTimeout(async () => {
-        this.messageTimers.delete(timerKey);
-
-        // Process the message through the configured message handler
-        if (this.config.onMessage) {
-          await this.config.onMessage({
-          contact: contactInfo,
-          message: message.body,
-          current_message: message,
-          channelId: this.channelId
-          });
-        }
-        }, 1000); // 1 second debounce
-
-        this.messageTimers.set(timerKey, timer);
-      } catch (error) {
-        console.error('Error processing WhatsApp message:', error);
-      }
-    });
-  }
-
-  /**
-   * Send message through callback (for compatibility with existing system)
-   */
-  setMessageCallback(callback: (contactId: string, message: string) => void): void {
-    this.config.sendMessageCallback = callback;
-  }
-
-  /**
-   * Set message handler for incoming messages
-   */
-  setMessageHandler(handler: (data: any) => Promise<void>): void {
-    this.config.onMessage = handler;
   }
 
   /**
@@ -385,21 +349,26 @@ export class WhatsappProvider extends BaseProvider {
    * Destruye el cliente y limpia recursos
    */
   async destroy(): Promise<void> {
-    try {
-      if (this.client) {
+    // Intentar destruir el cliente actual
+    if (this.client) {
+      try {
         await this.client.destroy();
+      } catch (error: any) {
+        // Si es error EBUSY, es esperado - continuar con la limpieza
+        if (error.message && error.message.includes('EBUSY')) {
+          console.log(`⚠️ Archivo de bloqueo ocupado para canal ${this.channelId}, continuando...`);
+        } else {
+          console.error(`Error destruyendo cliente para canal ${this.channelId}:`, error);
+        }
       }
-    } catch (error) {
-      console.error(`Error destroying client for channel ${this.channelId}:`, error);
     }
 
     // Limpiar estado
     this.client = null;
+    this.authenticated = false;
 
     // Limpiar timers
-    for (const timer of this.messageTimers.values()) {
-      clearTimeout(timer);
-    }
+    for (const timer of this.messageTimers.values()) clearTimeout(timer);
     this.messageTimers.clear();
   }
 
@@ -407,36 +376,13 @@ export class WhatsappProvider extends BaseProvider {
    * Maneja la limpieza de sesiones corruptas
    */
   private async handleSessionCleanup(): Promise<void> {
-    console.log(`🧹 Iniciando limpieza de sesión corrupta para canal ${this.channelId}`);
+    console.log(`🧹 Iniciando limpieza de sesión corrupta: ${this.channelId}`);
 
     try {
-      // Intentar destruir el cliente actual
-      if (this.client) {
-        try {
-          await this.client.destroy();
-        } catch (error: any) {
-          // Si es error EBUSY, es esperado - continuar con la limpieza
-          if (error.message && error.message.includes('EBUSY')) {
-            console.log(`⚠️ Archivo de bloqueo ocupado para canal ${this.channelId}, continuando...`);
-          } else {
-            console.error(`Error destruyendo cliente para canal ${this.channelId}:`, error);
-          }
-        }
-      }
-
-      // Limpiar estado del provider
-      this.client = null;
-      this.authenticated = false;
-
-      // Limpiar timers
-      for (const timer of this.messageTimers.values()) {
-        clearTimeout(timer);
-      }
-      this.messageTimers.clear();
-
       // Limpiar sesión serializada de Redis
       try {
-        await this.authSessionService.deleteSerializedSession(this.channelId);
+        const authSession = await this.authSessionService.getSessionByChannel(this.channelId);
+        if (authSession) await this.authSessionService.deleteSession(authSession.id);
         console.log(`🗑️ Sesión serializada eliminada para canal ${this.channelId}`);
       } catch (error) {
         console.error(`Error eliminando sesión serializada para canal ${this.channelId}:`, error);

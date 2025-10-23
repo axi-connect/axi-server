@@ -6,21 +6,22 @@ import { ChannelRepository } from './repositories/channel.repository.js';
 import { CredentialRepository } from './repositories/credential.repository.js';
 
 // Services
-import { getRedisClient } from '@/database/redis.js';
+import { getRedisClient, type RedisClient } from '@/database/redis.js';
 import { AuthSessionService } from '../application/services/auth-session.service.js';
 import { ChannelRuntimeService } from '../application/services/channel-runtime.service.js';
 import { ChannelWebSocketGateway } from '../application/services/channel-websocket.gateway.js';
 
 // Use Cases
 import { ChannelUseCases } from '../application/use-cases/channel.usecases.js';
+import { ChannelAuthUseCases } from '../application/use-cases/channel-auth.usecases.js';
 
 /**
  * Contenedor de dependencias centralizado para el módulo Channels
  * Maneja la creación e inyección de todas las dependencias de manera profesional
 */
 export class ChannelsContainer {
-    private redisClient: any;
     private prisma: PrismaClient;
+    private redisClient: RedisClient;
     private static instance: ChannelsContainer;
 
     // Repositories
@@ -34,6 +35,7 @@ export class ChannelsContainer {
 
     // Use Cases
     private channelUseCases: ChannelUseCases;
+    private channelAuthUseCases: ChannelAuthUseCases; // Acceso directo al caso de uso de autenticación
 
     private constructor(io: Server) {
         this.prisma = new PrismaClient();
@@ -44,19 +46,25 @@ export class ChannelsContainer {
         this.credentialRepository = new CredentialRepository(this.prisma);
         
         // Initialize services
-        this.authSessionService = new AuthSessionService(this.redisClient,this.credentialRepository);
+        this.authSessionService = new AuthSessionService(this.redisClient);
         this.runtimeService = new ChannelRuntimeService(this.channelRepository, this.authSessionService);
         this.webSocketGateway = new ChannelWebSocketGateway(io, this.runtimeService);
 
         // Connect runtime service with WebSocket gateway
         this.runtimeService.setWebSocketCallback((event) => { this.webSocketGateway.handleWebSocketEvent(event) });
 
+        this.channelAuthUseCases = new ChannelAuthUseCases(
+            this.runtimeService,
+            this.authSessionService,
+            this.channelRepository,
+            this.credentialRepository
+        );
+        
         // Initialize use cases
         this.channelUseCases = new ChannelUseCases(
-            this.channelRepository,
-            this.credentialRepository,
             this.runtimeService,
-            this.authSessionService
+            this.channelAuthUseCases,
+            this.channelRepository,
         );
     }
 
@@ -64,9 +72,7 @@ export class ChannelsContainer {
      * Crea o obtiene la instancia singleton del contenedor
     */
     static create(io: Server): ChannelsContainer {
-        if (!ChannelsContainer.instance) {
-            ChannelsContainer.instance = new ChannelsContainer(io);
-        }
+        if (!ChannelsContainer.instance) ChannelsContainer.instance = new ChannelsContainer(io);
         return ChannelsContainer.instance;
     }
 
@@ -140,18 +146,4 @@ export class ChannelsContainer {
         throw error;
         }
     }
-}
-
-/**
- * Función helper para crear el contenedor rápidamente
-*/
-export function createChannelsContainer(io: Server): ChannelsContainer {
-  return ChannelsContainer.create(io);
-}
-
-/**
- * Función helper para obtener la instancia del contenedor
-*/
-export function getChannelsContainer(): ChannelsContainer {
-  return ChannelsContainer.getInstance();
 }

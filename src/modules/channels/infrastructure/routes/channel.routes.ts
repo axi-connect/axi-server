@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authorize } from '@/middlewares/rbac.middleware.js';
-import { getChannelsContainer } from '../channels.container.js';
+import { ChannelsContainer } from '../channels.container.js';
 import { ChannelValidator } from '../../shared/validators/channel.validator.js';
 import { ChannelController } from '@/modules/channels/infrastructure/controllers/channel.controller.js';
 
@@ -15,7 +15,7 @@ export function createChannelRouter(): Router {
   const channelRouter = Router();
 
   // Get dependencies from container
-  const container = getChannelsContainer();
+  const container = ChannelsContainer.getInstance();
   const channelUseCases = container.getChannelUseCases();
 
   // Initialize controller with injected dependencies

@@ -249,13 +249,11 @@ export class ChannelController {
   getChannelQR = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const qrData = await this.channelUseCases.getChannelQR(id);
+      const {qrCode, qrCodeUrl, sessionId, expiresAt} = await this.channelUseCases.getChannelQR(id);
 
       const responseDto = new ResponseDto(true, 'QR code generated successfully', {
-        qrCode: qrData.qrCode,
-        qrCodeUrl: qrData.qrCodeUrl,
-        sessionId: qrData.sessionId,
-        expiresAt: this.formatter.format(qrData.expiresAt)
+        qrCode, qrCodeUrl, sessionId,
+        expiresAt: this.formatter.format(expiresAt)
       }, 200);
       res.status(200).json(responseDto);
     } catch (error: any) {

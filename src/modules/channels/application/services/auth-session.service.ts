@@ -1,7 +1,6 @@
 import { randomUUID } from 'crypto';
 import { ChannelProvider } from '@prisma/client';
 import { RedisClient } from '@/database/redis.js';
-import { CredentialRepositoryInterface } from '@/modules/channels/domain/repositories/credential-repository.interface.js';
 
 export interface AuthSession {
   id: string;
@@ -18,16 +17,14 @@ export interface AuthSession {
 
 export class AuthSessionService {
   private redisClient: RedisClient;
-  private sessions = new Map<string, AuthSession>();
-  private credentialRepository: CredentialRepositoryInterface | null = null;
+  private expireSessionTTL: number = 15 * 60 * 1000; // 15 minutes
 
-  constructor(redisClient?: RedisClient, credentialRepository?: CredentialRepositoryInterface) {
+  constructor(redisClient?: RedisClient) {
     this.redisClient = redisClient || new RedisClient();
-    this.credentialRepository = credentialRepository || null;
   }
 
   /**
-   * Crea una nueva sesión de autenticación temporal
+   * Crea una nueva sesión de autenticación serializada en Redis
    * @param channelId - ID del canal
    * @param provider - Proveedor del canal
    * @param qrCode - Código QR opcional
@@ -35,13 +32,12 @@ export class AuthSessionService {
    * @param ttlMinutes - Tiempo de vida en minutos (default: 15)
    * @returns Sesión de autenticación creada
   */
-  createSession(
+  async createSession(
     channelId: string,
     provider: ChannelProvider,
     qrCode?: string,
     qrCodeUrl?: string,
-    ttlMinutes: number = 15
-  ): AuthSession {
+  ): Promise<AuthSession> {
     const session: AuthSession = {
       id: randomUUID(),
       channelId,
@@ -49,19 +45,34 @@ export class AuthSessionService {
       status: 'pending',
       qrCode,
       qrCodeUrl,
-      expiresAt: new Date(Date.now() + ttlMinutes * 60 * 1000),
+      expiresAt: new Date(Date.now() + this.expireSessionTTL),
       createdAt: new Date(),
       metadata: {}
     };
 
-    this.sessions.set(session.id, session);
-
-    // Limpiar sesión expirada automáticamente
-    setTimeout(() => {
-      this.expireSession(session.id);
-    }, ttlMinutes * 60 * 1000);
+    const key = `whatsapp:session:${session.id}`;
+    await this.redisClient.setEx(key, this.expireSessionTTL, JSON.stringify(session));
+    console.log(`💾 Nueva sesión serializada creada: ${session.id}`);
 
     return session;
+  }
+
+  /**
+   * Actualiza la sesión serializada almacenada
+  */
+  async updateSession(sessionId: string, session: AuthSession): Promise<AuthSession> {
+    try {
+      const sessionSerialized = this.getSession(sessionId);
+      if (!sessionSerialized) throw new Error(`Sesión serializada no encontrada: ${sessionId}`);
+      const dataToUpdate: AuthSession = {...sessionSerialized, ...session};
+
+      await this.redisClient.setEx(`whatsapp:session:${sessionId}`, this.expireSessionTTL, JSON.stringify(dataToUpdate));
+      console.log(`💾 Sesión serializada actualizada: ${sessionId}`);
+      return dataToUpdate;
+    } catch (error) {
+      console.error(`Error actualizando sesión serializada: ${sessionId}:`, error);
+      throw error;
+    }
   }
 
   /**
@@ -69,18 +80,11 @@ export class AuthSessionService {
    * @param sessionId - ID de la sesión
    * @returns Sesión o null si no existe o expiró
   */
-  getSession(sessionId: string): AuthSession | null {
-    const session = this.sessions.get(sessionId);
+  async getSession(sessionId: string): Promise<AuthSession | null> {
+    const serializedSession = await this.redisClient.get(`whatsapp:session:${sessionId}`);
+    if (!serializedSession) return null;
 
-    if (!session) return null;
-
-    // Verificar si expiró
-    if (session.expiresAt < new Date()) {
-      this.expireSession(sessionId);
-      return null;
-    }
-
-    return session;
+    return JSON.parse(serializedSession) as AuthSession;
   }
 
   /**
@@ -88,30 +92,14 @@ export class AuthSessionService {
    * @param channelId - ID del canal
    * @returns Sesión activa o null
   */
-  getActiveSessionByChannel(channelId: string): AuthSession | null {
-    // Limpiar sesiones expiradas primero
-    this.cleanupExpiredSessions();
-
-    for (const session of this.sessions.values()) {
-      if (session.channelId === channelId &&
-          session.status === 'pending' &&
-          session.expiresAt > new Date()) {
-        return session;
-      }
+  async getSessionByChannel(channelId: string): Promise<AuthSession | null> {
+    const sessions = await this.redisClient.keys('whatsapp:session:*');
+    for (const sessionId of sessions) {
+      const session = await this.getSession(sessionId.split(':').pop() || '');
+      if (!session || session.channelId !== channelId) continue;
+      return session;
     }
     return null;
-  }
-
-  /**
-   * Limpia las sesiones expiradas
-  */
-  private cleanupExpiredSessions(): void {
-    const now = new Date();
-    for (const [sessionId, session] of this.sessions.entries()) {
-      if (session.expiresAt < now && session.status === 'pending') {
-        this.expireSession(sessionId);
-      }
-    }
   }
 
   /**
@@ -120,8 +108,8 @@ export class AuthSessionService {
    * @param metadata - Metadata adicional
    * @returns Sesión completada o null si no existe
   */
-  completeSession(sessionId: string, metadata?: any): AuthSession | null {
-    const session = this.sessions.get(sessionId);
+  async completeSession(sessionId: string, metadata?: any): Promise<AuthSession | null> {
+    const session = await this.getSession(sessionId);
 
     if (!session || session.status !== 'pending') return null;
 
@@ -138,8 +126,8 @@ export class AuthSessionService {
    * @param error - Error que causó el fallo
    * @returns Sesión fallida o null si no existe
   */
-  failSession(sessionId: string, error: string): AuthSession | null {
-    const session = this.sessions.get(sessionId);
+  async failSession(sessionId: string, error: string): Promise<AuthSession | null> {
+    const session = await this.getSession(sessionId);
 
     if (!session || session.status !== 'pending') return null;
 
@@ -150,36 +138,25 @@ export class AuthSessionService {
   }
 
   /**
-   * Expira una sesión
-   * @param sessionId - ID de la sesión
-  */
-  private expireSession(sessionId: string): void {
-    const session = this.sessions.get(sessionId);
-    if (session) {
-      session.status = 'expired';
-      // Mantener en memoria por un tiempo más para posibles consultas
-      setTimeout(() => {
-        this.sessions.delete(sessionId);
-      }, 5 * 60 * 1000); // Limpiar después de 5 minutos
-    }
-  }
-
-  /**
    * Obtiene estadísticas de sesiones
   */
-  getStats(): {
+  async getStats(): Promise<{
     total: number;
     pending: number;
     completed: number;
     failed: number;
     expired: number;
-  } {
+  }> {
     let pending = 0;
     let completed = 0;
     let failed = 0;
     let expired = 0;
 
-    for (const session of this.sessions.values()) {
+    const sessions = await this.redisClient.keys('whatsapp:session:*');
+    for (const sessionId of sessions) {
+      const session = await this.getSession(sessionId);
+      if (!session) continue;
+
       switch (session.status) {
         case 'pending': pending++; break;
         case 'completed': completed++; break;
@@ -189,96 +166,23 @@ export class AuthSessionService {
     }
 
     return {
-      total: this.sessions.size,
-      pending,
-      completed,
       failed,
-      expired
+      pending,
+      expired,
+      completed,
+      total: sessions.length,
     };
-  }
-
-  /**
-   * Guarda una sesión serializada de WhatsApp para persistencia
-  */
-  async saveSerializedSession(channelId: string, sessionData: any): Promise<void> {
-    if (!this.credentialRepository) {
-      console.warn('CredentialRepository no disponible para guardar sesión');
-      return;
-    }
-
-    try {
-      const key = `whatsapp:session:${channelId}`;
-      const serialized = JSON.stringify(sessionData);
-
-      // Guardar en Redis con expiración de 30 días
-      await this.redisClient.setEx(key, 30 * 24 * 60 * 60, serialized);
-
-      console.log(`💾 Sesión serializada guardada para canal ${channelId}`);
-    } catch (error) {
-      console.error(`Error guardando sesión serializada para canal ${channelId}:`, error);
-    }
-  }
-
-  /**
-   * Restaura una sesión serializada de WhatsApp
-  */
-  async restoreSession(channelId: string): Promise<boolean> {
-    try {
-      const key = `whatsapp:session:${channelId}`;
-      const serialized = await this.redisClient.get(key);
-
-      if (!serialized) {
-        console.log(`📭 No hay sesión serializada para canal ${channelId}`);
-        return false;
-      }
-
-      const sessionData = JSON.parse(serialized);
-
-      // Validar que la sesión no esté corrupta
-      if (!sessionData || typeof sessionData !== 'object') {
-        console.warn(`Sesión corrupta para canal ${channelId}, eliminando...`);
-        await this.redisClient.del(key);
-        return false;
-      }
-
-      console.log(`🔄 Sesión restaurada para canal ${channelId}`);
-      return true; // Indica que hay sesión disponible para restaurar
-
-    } catch (error) {
-      console.error(`Error restaurando sesión para canal ${channelId}:`, error);
-      return false;
-    }
-  }
-
-  /**
-   * Obtiene la sesión serializada almacenada
-  */
-  async getSerializedSession(channelId: string): Promise<any> {
-    try {
-      const key = `whatsapp:session:${channelId}`;
-      const serialized = await this.redisClient.get(key);
-
-      if (!serialized) {
-        return null;
-      }
-
-      return JSON.parse(serialized);
-    } catch (error) {
-      console.error(`Error obteniendo sesión serializada para canal ${channelId}:`, error);
-      return null;
-    }
   }
 
   /**
    * Elimina la sesión serializada almacenada
   */
-  async deleteSerializedSession(channelId: string): Promise<void> {
+  async deleteSession(sessionId: string): Promise<void> {
     try {
-      const key = `whatsapp:session:${channelId}`;
-      await this.redisClient.del(key);
-      console.log(`🗑️ Sesión serializada eliminada para canal ${channelId}`);
+      await this.redisClient.del(`whatsapp:session:${sessionId}`);
+      console.log(`🗑️ Sesión serializada eliminada: ${sessionId}`);
     } catch (error) {
-      console.error(`Error eliminando sesión serializada para canal ${channelId}:`, error);
+      console.error(`Error eliminando sesión serializada: ${sessionId}:`, error);
     }
   }
 

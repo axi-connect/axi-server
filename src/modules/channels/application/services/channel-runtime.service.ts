@@ -1,5 +1,6 @@
 import { ChannelProvider } from '@prisma/client';
 import { AuthSessionService } from './auth-session.service.js';
+import { type ChannelEntity } from '@/modules/channels/domain/entities/channel.js';
 import { WhatsappProvider } from '@/modules/channels/infrastructure/providers/WhatsappProvider.js';
 import { BaseProvider, ProviderConfig } from '@/modules/channels/infrastructure/providers/BaseProvider.js';
 import { ChannelStatus, RuntimeMessage, WebSocketEvent } from '@/modules/channels/domain/entities/channel.js';
@@ -10,18 +11,13 @@ import { ChannelRepositoryInterface } from '@/modules/channels/domain/repositori
  * Mantiene instancias de providers en memoria y gestiona su ciclo de vida
 */
 export class ChannelRuntimeService {
-    private authSessionService: AuthSessionService;
-    private channelRepository: ChannelRepositoryInterface;
     private activeProviders = new Map<string, BaseProvider>();
     private webSocketCallback?: (event: WebSocketEvent) => void;
 
     constructor(
-        channelRepository: ChannelRepositoryInterface,
-        authSessionService: AuthSessionService
-    ) {
-        this.channelRepository = channelRepository;
-        this.authSessionService = authSessionService;
-    }
+        private channelRepository: ChannelRepositoryInterface,
+        private authSessionService: AuthSessionService
+    ) {}
 
     /**
      * Configura el callback para emitir eventos WebSocket
@@ -64,7 +60,12 @@ export class ChannelRuntimeService {
 
     /**
      * Inicia un canal y lo mantiene activo en memoria
-     */
+     * @param channelId - El ID del canal a iniciar
+     * @returns void
+     * @throws Error si el canal no existe o no está marcado como activo
+     * @throws Error si el canal ya está activo
+     * @throws Error si el canal no es un provider $PROVIDER_NAME activo
+    */
     async startChannel(channelId: string): Promise<void> {
         // Verificar si ya está activo
         if (this.activeProviders.has(channelId)) {
@@ -73,17 +74,10 @@ export class ChannelRuntimeService {
         }
 
         const channel = await this.channelRepository.findById(channelId);
-
         if (!channel) throw new Error(`Canal ${channelId} no encontrado`);
-        if (!channel.is_active) throw new Error(`Canal ${channelId} no está marcado como activo`);
 
         // Crear instancia del provider
         const provider = await this.createProviderInstance(channel);
-
-        // Configurar manejador de mensajes
-        provider.setMessageHandler(async (messageData: any) => {
-            await this.handleIncomingMessage(channelId, messageData);
-        });
 
         // Almacenar en memoria
         this.activeProviders.set(channelId, provider);
@@ -106,8 +100,8 @@ export class ChannelRuntimeService {
     async stopChannel(channelId: string): Promise<void> {
         const provider = this.activeProviders.get(channelId);
         if (!provider) {
-        console.log(`📱 Canal ${channelId} no está activo`);
-        return;
+            console.log(`📱 Canal ${channelId} no está activo`);
+            return;
         }
 
         try {
@@ -176,39 +170,40 @@ export class ChannelRuntimeService {
     async emitMessage(channelId: string, payload: any): Promise<void> {
         const provider = this.activeProviders.get(channelId);
         if (!provider) {
-        throw new Error(`Canal ${channelId} no está activo`);
+            throw new Error(`Canal ${channelId} no está activo`);
         }
 
         try {
-        const result = await provider.sendMessage(payload);
+            const result = await provider.sendMessage(payload);
 
-        // Emitir evento de mensaje enviado
-        const channel = await this.channelRepository.findById(channelId);
-        if (channel) {
-            this.emitWebSocketEvent({
-            event: 'message.sent',
-            channelId,
-            companyId: channel.company_id,
-            data: { messageId: payload.id, result },
-            timestamp: new Date()
-            });
-        }
+            // Emitir evento de mensaje enviado
+            const channel = await this.channelRepository.findById(channelId);
+            if (channel) {
+                this.emitWebSocketEvent({
+                    event: 'message.sent',
+                    channelId,
+                    companyId: channel.company_id,
+                    data: { messageId: payload.id, result },
+                    timestamp: new Date()
+                });
+            }
         } catch (error) {
-        console.error(`❌ Error enviando mensaje en canal ${channelId}:`, error);
-        throw error;
+            console.error(`❌ Error enviando mensaje en canal ${channelId}:`, error);
+            throw error;
         }
     }
 
     /**
      * Genera QR para un canal WhatsApp
     */
-    async generateQR(channelId: string, forceReinit: boolean = false): Promise<string> {
+    async generateQR(channelId: string): Promise<string> {
+        const isChannelActive = this.isChannelActive(channelId);
+        if (!isChannelActive) await this.startChannel(channelId);
+        
         const provider = this.activeProviders.get(channelId);
-        if (!provider || !(provider instanceof WhatsappProvider)) {
-            throw new Error(`Canal ${channelId} no es un provider WhatsApp activo`);
-        }
-
-        return provider.generateQR(forceReinit);
+        if(!provider || !(provider instanceof WhatsappProvider)) throw new Error(`Canal ${channelId} no es un provider WhatsApp activo`);
+        
+        return provider.generateQR();
     }
 
     /**
@@ -228,25 +223,17 @@ export class ChannelRuntimeService {
     /**
      * Crea instancia del provider apropiado
     */
-    private async createProviderInstance(channel: any): Promise<BaseProvider> {
+    private async createProviderInstance(channel: ChannelEntity): Promise<BaseProvider> {
         const config: ProviderConfig = {
-            executablePath: channel.config?.executablePath,
-            onMessage: async (messageData: any) => {
-                await this.handleIncomingMessage(channel.id, messageData);
-            },
-            sendMessageCallback: null
+            emitEventCallback: (event: WebSocketEvent) => this.emitWebSocketEvent(event)
         };
 
         switch (channel.provider) {
             case ChannelProvider.CUSTOM: 
             case ChannelProvider.DEFAULT:
                 const whatsappProvider = new WhatsappProvider(config, channel.id, this.authSessionService);
-
-                // Intentar restaurar sesión existente
-                const hasRestoredSession = await this.authSessionService.restoreSession(channel.id);
-                if (hasRestoredSession) {
-                console.log(`🔄 Sesión restaurada para canal ${channel.id}`);
-                }
+                // Configurar manejador de mensajes
+                whatsappProvider.setMessageHandler(async (messageData: any) => await this.handleIncomingMessage(channel.id, messageData));
 
                 return whatsappProvider;
 
@@ -268,30 +255,30 @@ export class ChannelRuntimeService {
      */
     private async handleIncomingMessage(channelId: string, messageData: any): Promise<void> {
         try {
-        const channel = await this.channelRepository.findById(channelId);
-        if (!channel) return;
+            const channel = await this.channelRepository.findById(channelId);
+            if (!channel) return;
 
-        const runtimeMessage: RuntimeMessage = {
-            id: messageData.id || `msg_${Date.now()}`,
-            channelId,
-            direction: 'incoming',
-            content: messageData,
-            timestamp: new Date(),
-            metadata: messageData.metadata
-        };
+            const runtimeMessage: RuntimeMessage = {
+                id: messageData.id || `msg_${Date.now()}`,
+                channelId,
+                direction: 'incoming',
+                content: messageData,
+                timestamp: new Date(),
+                metadata: messageData.metadata
+            };
 
-        // Emitir evento WebSocket
-        this.emitWebSocketEvent({
-            event: 'message.received',
-            channelId,
-            companyId: channel.company_id,
-            data: runtimeMessage,
-            timestamp: new Date()
-        });
+            // Emitir evento WebSocket
+            this.emitWebSocketEvent({
+                event: 'message.received',
+                channelId,
+                companyId: channel.company_id,
+                data: runtimeMessage,
+                timestamp: new Date()
+            });
 
-        console.log(`📨 Mensaje recibido en canal ${channelId}`);
+            console.log(`📨 Mensaje recibido en canal ${channelId}`);
         } catch (error) {
-        console.error(`❌ Error procesando mensaje en canal ${channelId}:`, error);
+            console.error(`❌ Error procesando mensaje en canal ${channelId}:`, error);
         }
     }
 
