@@ -382,8 +382,8 @@ export class WhatsappProvider extends BaseProvider {
       // Limpiar sesión serializada de Redis
       try {
         const authSession = await this.authSessionService.getSessionByChannel(this.channelId);
+        console.log('authSession', authSession);
         if (authSession) await this.authSessionService.deleteSession(authSession.id);
-        console.log(`🗑️ Sesión serializada eliminada para canal ${this.channelId}`);
       } catch (error) {
         console.error(`Error eliminando sesión serializada para canal ${this.channelId}:`, error);
       }

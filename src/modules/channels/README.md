@@ -91,22 +91,33 @@ src/modules/channels/
   - Factory method para instanciar providers según tipo (`createProviderInstance()`)
 
 #### **2. ✅ ChannelWebSocketGateway**
-- **Función**: Gateway bidireccional para comunicación en tiempo real con el frontend
+- **Función**: Gateway bidireccional para comunicación en tiempo real usando Namespaces
+- **Arquitectura**: Basada en Namespaces de Socket.IO para organización modular
 - **Características**:
-  - Conexiones organizadas por compañía y canal (`companyConnections`, `connections`)
-  - Eventos WebSocket soportados:
-    - `channel.status.updated` - Cambios de estado del canal
-    - `channel.message.received` - Mensajes entrantes
-    - `channel.auth.required` - Requiere autenticación
-    - `channel.disconnected` - Desconexión del provider
-    - `channel.authenticated` - Canal Autenticado
-    - `channel.auth_failure` - Fallo de autenticación
-  - Autenticación de conexiones con validación de `companyId`
-  - Reconexión automática y manejo graceful de desconexiones
-  - Integración con Socket.IO para salas y presencia en tiempo real
-  - Estadísticas de conexiones (`getStats()`)
+  - **4 Namespaces especializados** con handlers dedicados:
+    - `/auth` - Autenticación y gestión de compañías
+    - `/channel` - Unión/salida de canales y consultas de estado
+    - `/message` - Envío y recepción de mensajes
+    - `/system` - Health checks y operaciones del sistema
+  - **Handlers especializados** con middlewares propios por namespace
+  - **Eventos tipados** con interfaces TypeScript específicas
+  - **Separación de responsabilidades** clara entre autenticación, canales, mensajes y sistema
+  - **Gestión robusta de conexiones** con limpieza automática
+  - **Estadísticas detalladas** por namespace (`getStats()`)
+  - **Shutdown graceful** de todos los namespaces
 
-#### **3. ✅ AuthSessionService**
+#### **9.1 ✅ Autenticación JWT en WebSocket**
+- **Middleware compartido**: `SocketAuthMiddleware` para validación de tokens JWT
+- **Extracción automática**: Desde headers `Authorization`, query params o handshake auth
+- **Información de usuario**: Adjuntada automáticamente al socket (`socket.user`)
+- **Validación de tokens**: Verificación de expiración y tipo (access/refresh)
+- **Namespaces protegidos**: `/channel`, `/message`, `/system` requieren autenticación
+- **Namespace público**: `/auth` permite conexiones no autenticadas inicialmente
+- **Interfaces tipadas**: `AuthenticatedUser`, `AuthenticatedSocket` para type safety
+- **IDs de socket independientes**: Cada conexión WebSocket tiene ID único (comportamiento correcto)
+- **Múltiples conexiones por usuario**: Un usuario puede tener conexiones simultáneas a diferentes namespaces
+
+#### **10. ✅ AuthSessionService**
 - **Función**: Gestión de sesiones de autenticación con persistencia en Redis
 - **Características**:
   - Integración completa con Redis para almacenamiento de sesiones serializadas
@@ -116,7 +127,7 @@ src/modules/channels/
   - Gestión de expiración de sesiones con limpieza automática
   - Map en memoria con respaldo en Redis para alta performance
 
-#### **4. ✅ ChannelsContainer (Dependency Injection)**
+#### **11. ✅ ChannelsContainer (Dependency Injection)**
 - **Función**: Contenedor singleton para gestión centralizada de dependencias
 - **Características**:
   - Patrón Singleton para instancia única global
@@ -206,10 +217,131 @@ src/modules/channels/
   - `channel.session_cleaned` - Sesión limpiada exitosamente después de desconexión
   - `channel.started` - Canal iniciado exitosamente
   - `channel.stopped` - Canal detenido
+  - `channel.joined` - Cliente unido al canal exitosamente 
 
-- **Manejo robusto de errores**: Los eventos se emiten con timeouts y manejo de excepciones para evitar desconexiones de WebSocket
+- **Ejemplos de uso por Namespace con Autenticación JWT**:
 
-#### **11. ✅ Recuperación de Errores Avanzada**
+  > **💡 Nota importante**: Cada conexión WebSocket tiene un ID único generado por Socket.IO, incluso para el mismo usuario. Esto permite múltiples pestañas/conexiones simultáneas y es el comportamiento esperado/correcto.
+  >
+  > **Ejemplo del comportamiento observado:**
+  > ```
+  > Usuario: mariana.garcia@example.com
+  > ├── /auth → Socket ID: VTu_Adkoi5OlMaEyAAAD ✅
+  > ├── /channel → Socket ID: W_9AHC1emgQl2ySkAAAJ ✅
+  > ├── /message → Socket ID: X_7BHD2fmgRl3yTlAAAK ✅
+  > └── /system → Socket ID: Y_8CHD3gnhSm4zUmAAAL ✅
+  > ```
+  ```typescript
+  import io from 'socket.io-client';
+
+  // 1. Obtener token JWT (desde localStorage, cookies, etc.)
+  const token = localStorage.getItem('accessToken'); // o desde tu sistema de auth
+
+  // 2. Conectar al namespace de autenticación (requiere token)
+  const authSocket = io('/auth', {
+    auth: {
+      token: token
+    },
+    // O alternativamente usando headers:
+    // extraHeaders: {
+    //   'Authorization': `Bearer ${token}`
+    // }
+  });
+
+  // Escuchar eventos de autenticación
+  authSocket.on('authenticated', (data) => {
+    console.log('✅ Autenticado:', data);
+  });
+
+  authSocket.on('auth_error', (error) => {
+    console.error('❌ Error de autenticación:', error);
+  });
+
+  // 3. Conectar al namespace de canales (requiere token)
+  const channelSocket = io('/channel', {
+    auth: {
+      token: token
+    }
+  });
+
+  // Unirse a un canal
+  channelSocket.emit('channel.join', { channelId: 'abc-123' });
+
+  // Consultar estado de canal
+  channelSocket.emit('channel.status', { channelId: 'abc-123' });
+
+  // Escuchar eventos del canal
+  channelSocket.on('channel.joined', (data) => {
+    console.log('📱 Unido al canal:', data.channelId);
+  });
+
+  channelSocket.on('channel.status_response', (data) => {
+    console.log('📊 Estado del canal:', data);
+  });
+
+  // 4. Conectar al namespace de mensajes (requiere token)
+  const messageSocket = io('/message', {
+    auth: {
+      token: token
+    }
+  });
+
+  // Enviar mensaje
+  messageSocket.emit('send_message', {
+    channelId: 'abc-123',
+    message: 'Hola mundo desde WebSocket!',
+    recipient: '+1234567890' // opcional
+  });
+
+  // Escuchar confirmación de envío
+  messageSocket.on('message_sent', (data) => {
+    console.log('✅ Mensaje enviado:', data);
+  });
+
+  // Escuchar mensajes entrantes
+  messageSocket.on('message_received', (data) => {
+    console.log('📨 Mensaje recibido:', data);
+  });
+
+  // 5. Conectar al namespace del sistema (requiere token)
+  const systemSocket = io('/system', {
+    auth: {
+      token: token
+    }
+  });
+
+  // Health check
+  systemSocket.emit('health_check');
+
+  // Ping/Pong para mantener conexión
+  systemSocket.emit('ping', { timestamp: Date.now() });
+
+  systemSocket.on('pong', (data) => {
+    const latency = Date.now() - data.timestamp;
+    console.log('🏓 Latencia:', latency, 'ms');
+  });
+
+  systemSocket.on('health_response', (data) => {
+    console.log('💚 Health check:', data);
+  });
+
+  // 6. Manejo de errores común para todos los namespaces
+  [authSocket, channelSocket, messageSocket, systemSocket].forEach(socket => {
+    socket.on('connect_error', (error) => {
+      console.error('❌ Error de conexión:', error.message);
+      if (error.message.includes('Token')) {
+        // Token expirado o inválido - redirigir a login
+        window.location.href = '/login';
+      }
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log('🔌 Desconectado:', reason);
+    });
+  });
+  ```
+
+#### **12. ✅ Recuperación de Errores Avanzada**
 - **Manejo de EBUSY**: Sesiones corruptas detectadas y limpiadas automáticamente
 - **ProtocolError de Puppeteer**: Errores `Target closed`, `Session closed` manejados gracefully
 - **Timeouts en operaciones**: `Promise.race` para evitar operaciones colgadas

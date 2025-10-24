@@ -1,266 +1,124 @@
-import { Server, Socket } from 'socket.io';
+import { Server, Namespace } from 'socket.io';
 import { ChannelRuntimeService } from './channel-runtime.service.js';
 import { WebSocketEvent } from '@/modules/channels/domain/entities/channel.js';
+
+// Importar handlers y middleware
+import {
+  NAMESPACES,
+  createAuthHandler,
+  createSystemHandler,
+  createChannelHandler,
+  createMessageHandler,
+  createSocketAuthMiddleware,
+  type AuthHandler,
+  type SystemHandler,
+  type ChannelHandler,
+  type MessageHandler,
+  type SocketAuthMiddleware,
+} from '../../infrastructure/handlers/index.js';
 
 /**
  * Gateway WebSocket para mensajería bidireccional en tiempo real
  * Gestiona conexiones de clientes y sincroniza eventos de canales
+ * Arquitectura basada en Namespaces de Socket.IO
 */
 export class ChannelWebSocketGateway {
-  private io: Server;
-  private runtimeService: ChannelRuntimeService;
-  private connections = new Map<string, Set<Socket>>();
-  private companyConnections = new Map<number, Set<Socket>>();
+  // Middleware de autenticación compartido
+  private socketAuthMiddleware: SocketAuthMiddleware;
 
-  constructor(io: Server, runtimeService: ChannelRuntimeService) {
-    this.io = io;
-    this.runtimeService = runtimeService;
-    this.setupSocketHandlers();
+  // Handlers especializados por namespace
+  private authHandler: AuthHandler;
+  private systemHandler: SystemHandler;
+  private channelHandler: ChannelHandler;
+  private messageHandler: MessageHandler;
+
+  // Namespaces
+  private authNamespace: Namespace;
+  private systemNamespace: Namespace;
+  private channelNamespace: Namespace;
+  private messageNamespace: Namespace;
+
+  constructor(private io: Server, private runtimeService: ChannelRuntimeService) {
+    // Crear middleware de autenticación
+    this.socketAuthMiddleware = createSocketAuthMiddleware();
+
+    // Crear handlers especializados
+    this.authHandler = createAuthHandler();
+    this.systemHandler = createSystemHandler();
+    this.channelHandler = createChannelHandler(runtimeService);
+    this.messageHandler = createMessageHandler(runtimeService);
+
+    // Crear namespaces
+    this.authNamespace = this.io.of(NAMESPACES.AUTH);
+    this.channelNamespace = this.io.of(NAMESPACES.CHANNEL);
+    this.messageNamespace = this.io.of(NAMESPACES.MESSAGE);
+    this.systemNamespace = this.io.of(NAMESPACES.SYSTEM);
+
+    // Configurar handlers
+    this.setupNamespaceHandlers();
   }
 
   /**
-   * Configura los manejadores de eventos de Socket.IO
+   * Configura los handlers para cada namespace con autenticación
   */
-  private setupSocketHandlers(): void {
-    this.io.on('connection', (socket: Socket) => {
-      console.log(`🔌 Nueva conexión WebSocket: ${socket.id}`);
+  private setupNamespaceHandlers(): void {
+    console.log('🚀 Configurando handlers de namespaces WebSocket con autenticación...');
 
-      // Autenticación de conexión
-      socket.on('authenticate', (data: { companyId: number; token?: string }) => {
-        this.handleAuthentication(socket, data);
-      });
+    // Configurar handler de autenticación (sin middleware adicional)
+    this.authHandler.setup(this.authNamespace);
+    console.log(`✅ Namespace ${NAMESPACES.AUTH} configurado`);
 
-      // Solicitar estado de canal
-      socket.on('channel.status', (data: { channelId: string }) => {
-        this.handleChannelStatusRequest(socket, data);
-      });
+    // Aplicar middleware de autenticación a namespaces protegidos
+    this.authNamespace.use(this.socketAuthMiddleware.authMiddleware);
+    this.systemNamespace.use(this.socketAuthMiddleware.authMiddleware);
+    this.channelNamespace.use(this.socketAuthMiddleware.authMiddleware);
+    this.messageNamespace.use(this.socketAuthMiddleware.authMiddleware);
 
-      // Enviar mensaje
-      socket.on('send_message', (data: any) => {
-        this.handleSendMessage(socket, data);
-      });
+    // Configurar handlers para namespaces protegidos
+    this.channelHandler.setup(this.channelNamespace);
+    console.log(`✅ Namespace ${NAMESPACES.CHANNEL} configurado con autenticación`);
 
-      // Unirse a sala de canal
-      socket.on('join_channel', (data: { channelId: string }) => {
-        this.handleJoinChannel(socket, data);
-      });
+    this.messageHandler.setup(this.messageNamespace);
+    console.log(`✅ Namespace ${NAMESPACES.MESSAGE} configurado con autenticación`);
 
-      // Salir de sala de canal
-      socket.on('leave_channel', (data: { channelId: string }) => {
-        this.handleLeaveChannel(socket, data);
-      });
+    this.systemHandler.setup(this.systemNamespace);
+    console.log(`✅ Namespace ${NAMESPACES.SYSTEM} configurado con autenticación`);
 
-      // Ping/Pong para mantener conexión viva
-      socket.on('ping', () => {
-        socket.emit('pong');
-      });
+    console.log('🎯 Todos los namespaces WebSocket configurados exitosamente con autenticación JWT');
+  }
 
-      // Desconexión
-      socket.on('disconnect', () => {
-        this.handleDisconnect(socket);
-      });
+  // Los métodos de manejo individuales han migrados a sus respectivos handlers especializados
+
+  /**
+   * Emite evento a un canal específico usando el namespace de canales
+  */
+  emitToChannel(channelId: string, event: string, data: any): void {
+    this.channelNamespace.to(`channel_${channelId}`).emit(event, {
+      channelId,
+      ...data,
+      timestamp: new Date()
     });
   }
 
   /**
-   * Maneja la autenticación de conexiones WebSocket
-  */
-  private handleAuthentication(socket: Socket, data: { companyId: number; token?: string }): void {
-    try {
-      const { companyId, token } = data;
-
-      if (!companyId) {
-        socket.emit('error', { message: 'companyId requerido' });
-        return;
-      }
-
-      // TODO: Validar token JWT si es necesario
-      // Por ahora asumimos que la autenticación es válida
-
-      // Registrar conexión por compañía
-      if (!this.companyConnections.has(companyId)) {
-        this.companyConnections.set(companyId, new Set());
-      }
-      this.companyConnections.get(companyId)!.add(socket);
-
-      // Unir socket a sala de compañía
-      socket.join(`company_${companyId}`);
-
-      socket.emit('authenticated', { companyId });
-
-      console.log(`✅ Socket ${socket.id} autenticado para compañía ${companyId}`);
-
-    } catch (error) {
-      console.error('Error en autenticación WebSocket:', error);
-      socket.emit('error', { message: 'Error de autenticación' });
-    }
-  }
-
-  /**
-   * Maneja solicitud de estado de canal
-  */
-  private async handleChannelStatusRequest(socket: Socket, data: { channelId: string }): Promise<void> {
-    try {
-      const { channelId } = data;
-
-      if (!channelId) {
-        socket.emit('error', { message: 'El parámetro channelId es requerido' });
-        return;
-      }
-
-      const status = await this.runtimeService.getChannelStatus(channelId);
-      socket.emit('channel.status_response', { channelId, status });
-
-    } catch (error: any) {
-      console.error('Error obteniendo estado de canal:', error);
-      socket.emit('error', { message: error.message });
-    }
-  }
-
-  /**
-   * Maneja envío de mensajes desde el cliente
-  */
-  private async handleSendMessage(socket: Socket, data: any): Promise<void> {
-    try {
-      const { channelId, message, recipient } = data;
-
-      if (!channelId || !message) {
-        socket.emit('error', { message: 'channelId y message requeridos' });
-        return;
-      }
-
-      // Verificar que el canal esté activo
-      if (!this.runtimeService.isChannelActive(channelId)) {
-        socket.emit('error', { message: 'Canal no activo' });
-        return;
-      }
-
-      // Preparar payload del mensaje
-      const messagePayload = {
-        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        content: message,
-        recipient,
-        timestamp: new Date(),
-        fromSocket: socket.id
-      };
-
-      // Enviar mensaje a través del runtime service
-      await this.runtimeService.emitMessage(channelId, messagePayload);
-
-      // Confirmar envío al cliente
-      socket.emit('message_sent', {
-        id: messagePayload.id,
-        channelId,
-        status: 'sent'
-      });
-
-    } catch (error: any) {
-      console.error('Error enviando mensaje:', error);
-      socket.emit('error', { message: error.message });
-    }
-  }
-
-  /**
-   * Maneja unión a sala de canal
-  */
-  private handleJoinChannel(socket: Socket, data: { channelId: string }): void {
-    try {
-      const { channelId } = data;
-
-      if (!channelId) {
-        socket.emit('error', { message: 'channelId requerido' });
-        return;
-      }
-
-      // Registrar conexión por canal
-      if (!this.connections.has(channelId)) this.connections.set(channelId, new Set());
-      this.connections.get(channelId)!.add(socket);
-
-      // Unir socket a sala de canal
-      socket.join(`channel_${channelId}`);
-      socket.emit('joined_channel', { channelId });
-
-      console.log(`📱 Socket ${socket.id} se unió al canal ${channelId}`);
-    } catch (error) {
-      console.error('Error uniendo a canal:', error);
-      socket.emit('error', { message: 'Error uniendo a canal' });
-    }
-  }
-
-  /**
-   * Maneja salida de sala de canal
-  */
-  private handleLeaveChannel(socket: Socket, data: { channelId: string }): void {
-    try {
-      const { channelId } = data;
-
-      // Remover de conexiones por canal
-      const channelConnections = this.connections.get(channelId);
-      if (channelConnections) {
-        channelConnections.delete(socket);
-        if (channelConnections.size === 0) {
-          this.connections.delete(channelId);
-        }
-      }
-
-      // Salir de sala de canal
-      socket.leave(`channel_${channelId}`);
-
-      socket.emit('left_channel', { channelId });
-
-      console.log(`📱 Socket ${socket.id} salió del canal ${channelId}`);
-
-    } catch (error) {
-      console.error('Error saliendo de canal:', error);
-    }
-  }
-
-  /**
-   * Maneja desconexión de socket
-  */
-  private handleDisconnect(socket: Socket): void {
-    console.log(`🔌 Socket desconectado: ${socket.id}`);
-
-    // Remover de todas las conexiones por canal
-    for (const [channelId, sockets] of this.connections.entries()) {
-      if (sockets.has(socket)) {
-        sockets.delete(socket);
-        if (sockets.size === 0) {
-          this.connections.delete(channelId);
-        }
-      }
-    }
-
-    // Remover de conexiones por compañía
-    for (const [companyId, sockets] of this.companyConnections.entries()) {
-      if (sockets.has(socket)) {
-        sockets.delete(socket);
-        if (sockets.size === 0) {
-          this.companyConnections.delete(companyId);
-        }
-      }
-    }
-  }
-
-  /**
-   * Emite evento a un canal específico
-  */
-  emitToChannel(channelId: string, event: string, data: any): void {
-    this.io.to(`channel_${channelId}`).emit(event, { channelId, ...data });
-  }
-
-  /**
-   * Emite evento a una compañía específica
+   * Emite evento a una compañía específica usando el namespace de auth
   */
   emitToCompany(companyId: number, event: string, data: any): void {
-    this.io.to(`company_${companyId}`).emit(event, { companyId, ...data });
+    this.authNamespace.to(`company_${companyId}`).emit(event, {
+      companyId,
+      ...data,
+      timestamp: new Date()
+    });
   }
 
   /**
-   * Emite evento a todos los clientes conectados
+   * Emite evento a todos los clientes conectados usando el namespace de sistema
   */
   emitToAll(event: string, data: any): void {
-    this.io.emit(event, data);
+    this.systemNamespace.emit(event, {
+      ...data,
+      timestamp: new Date()
+    });
   }
 
   /**
@@ -270,52 +128,78 @@ export class ChannelWebSocketGateway {
     const { event: eventName, channelId, companyId, data, timestamp } = event;
     console.log('handleWebSocketEvent', event);
     // Emitir a canal específico
-    if (channelId) {
-      this.emitToChannel(channelId, eventName, { data, timestamp });
-    }
+    if (channelId) this.emitToChannel(channelId, eventName, { data, timestamp });
 
     // Emitir a compañía específica
-    if (companyId) {
-      this.emitToCompany(companyId, eventName, { data, timestamp });
-    }
+    if (companyId) this.emitToCompany(companyId, eventName, { data, timestamp });
   }
 
   /**
-   * Obtiene estadísticas de conexiones
+   * Obtiene estadísticas de conexiones desde todos los handlers
   */
   getStats(): {
-    totalChannels: number;
-    totalCompanies: number;
+    auth: ReturnType<AuthHandler['getStats']>;
+    channels: ReturnType<ChannelHandler['getStats']>;
+    messages: ReturnType<MessageHandler['getStats']>;
+    system: ReturnType<SystemHandler['getStats']>;
     totalConnections: number;
   } {
-    let totalConnections = 0;
-
-    // Contar conexiones por canal
-    for (const sockets of this.connections.values()) totalConnections += sockets.size;
+    const authStats = this.authHandler.getStats();
+    const channelStats = this.channelHandler.getStats();
+    const messageStats = this.messageHandler.getStats();
+    const systemStats = this.systemHandler.getStats();
 
     return {
-      totalChannels: this.connections.size,
-      totalCompanies: this.companyConnections.size,
-      totalConnections
+      auth: authStats,
+      channels: channelStats,
+      messages: messageStats,
+      system: systemStats,
+      totalConnections: authStats.totalConnections + channelStats.totalConnections
     };
   }
 
   /**
-   * Cierra el gateway y todas las conexiones
+   * Cierra el gateway y todas las conexiones de todos los namespaces
   */
   async shutdown(): Promise<void> {
     console.log('🛑 Cerrando ChannelWebSocketGateway...');
 
-    // Cerrar todas las conexiones
-    const sockets = await this.io.fetchSockets();
-    for (const socket of sockets) {
-      socket.disconnect(true);
+    try {
+      // Cerrar namespace de autenticación
+      const authSockets = await this.authNamespace.fetchSockets();
+      for (const socket of authSockets) {
+        socket.disconnect(true);
+      }
+
+      // Cerrar namespace de canales
+      const channelSockets = await this.channelNamespace.fetchSockets();
+      for (const socket of channelSockets) {
+        socket.disconnect(true);
+      }
+
+      // Cerrar namespace de mensajes
+      const messageSockets = await this.messageNamespace.fetchSockets();
+      for (const socket of messageSockets) {
+        socket.disconnect(true);
+      }
+
+      // Cerrar namespace del sistema
+      const systemSockets = await this.systemNamespace.fetchSockets();
+      for (const socket of systemSockets) {
+        socket.disconnect(true);
+      }
+
+      console.log('✅ Todos los namespaces WebSocket cerrados');
+
+    } catch (error) {
+      console.error('❌ Error cerrando namespaces:', error);
+      // Fallback: cerrar servidor principal
+      const allSockets = await this.io.fetchSockets();
+      for (const socket of allSockets) {
+        socket.disconnect(true);
+      }
     }
 
-    // Limpiar mapas
-    this.connections.clear();
-    this.companyConnections.clear();
-
-    console.log('✅ ChannelWebSocketGateway cerrado');
+    console.log('✅ ChannelWebSocketGateway cerrado completamente');
   }
 }
