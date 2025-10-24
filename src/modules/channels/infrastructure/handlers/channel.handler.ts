@@ -178,7 +178,7 @@ export class ChannelHandler {
 
         } catch (error: any) {
             console.error('❌ Error uniendo a canal:', error);
-            socket.emit('channel_error', {
+            socket.emit('channel.error', {
                 message: error.message || 'Error interno uniendo a canal',
                 code: 'JOIN_CHANNEL_ERROR',
                 channelId: data.channelId
