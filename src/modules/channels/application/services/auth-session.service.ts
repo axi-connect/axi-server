@@ -1,4 +1,6 @@
+import path from 'path';
 import { randomUUID } from 'crypto';
+import { promises as fs } from 'fs';
 import { ChannelProvider } from '@prisma/client';
 import { RedisClient } from '@/database/redis.js';
 
@@ -103,21 +105,82 @@ export class AuthSessionService {
   }
 
   /**
-   * Completa una sesión de autenticación
+   * Completa una sesión de autenticación con limpieza automática de QR
    * @param sessionId - ID de la sesión
    * @param metadata - Metadata adicional
    * @returns Sesión completada o null si no existe
   */
-  async completeSession(sessionId: string, metadata?: any): Promise<AuthSession | null> {
-    const session = await this.getSession(sessionId);
-
+  async completeSession(channelId: string, metadata?: any): Promise<AuthSession | null> {
+    const session = await this.getSessionByChannel(channelId);
     if (!session || session.status !== 'pending') return null;
 
+    // Actualizar estado de la sesión
     session.status = 'completed';
     session.completedAt = new Date();
     session.metadata = { ...session.metadata, ...metadata };
 
+    // Limpiar archivo QR automáticamente después de completar la sesión
+    if (session.qrCodeUrl) {
+      try {
+        await this.cleanupQRFile(session.qrCodeUrl);
+        console.log(`🧹 QR limpiado automáticamente para sesión completada: ${session.id}`);
+      } catch (error) {
+        console.warn(`⚠️ Error limpiando QR para sesión completada ${session.id}:`, error);
+        // No fallar la sesión por error de limpieza
+      }
+    }
+
+    // Guardar la sesión actualizada en Redis
+    try {
+      const key = `whatsapp:session:${session.id}`;
+      await this.redisClient.setEx(key, this.expireSessionTTL, JSON.stringify(session));
+      console.log(`💾 Sesión completada guardada: ${session.id}`);
+    } catch (error) {
+      console.error(`❌ Error guardando sesión completada ${session.id}:`, error);
+      throw error;
+    }
+
     return session;
+  }
+
+  /**
+   * Limpia el archivo QR físico de una sesión
+   * @param qrCodeUrl - URL del archivo QR a eliminar
+   */
+  private async cleanupQRFile(qrCodeUrl: string): Promise<void> {
+    try {
+      // Extraer el path relativo del archivo desde la URL
+      // "/qr-images/qr-123456789.svg" → "qr-123456789.svg"
+      const urlParts = qrCodeUrl.split('/');
+      const filename = urlParts[urlParts.length - 1];
+
+      if (!filename || !filename.startsWith('qr-') || !filename.endsWith('.svg')) {
+        console.warn(`⚠️ Nombre de archivo QR inválido: ${filename}`);
+        return;
+      }
+
+      // Construir path absoluto al archivo
+      console.log('process.cwd():', process.cwd())
+      const publicDir = path.resolve(process.cwd(), 'src', 'public', 'qr-images');
+      const filePath = path.join(publicDir, filename);
+
+      // Verificar que el archivo existe antes de intentar eliminarlo
+      await fs.access(filePath);
+
+      // Eliminar el archivo
+      await fs.unlink(filePath);
+      console.log(`🗑️ Archivo QR eliminado: ${filename}`);
+
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        // Archivo ya no existe, es normal
+        console.log(`ℹ️ Archivo QR ya eliminado o no encontrado: ${qrCodeUrl}`);
+      } else {
+        // Error real al eliminar
+        console.error(`❌ Error eliminando archivo QR ${qrCodeUrl}:`, error.message);
+        throw error;
+      }
+    }
   }
 
   /**
@@ -138,24 +201,33 @@ export class AuthSessionService {
   }
 
   /**
-   * Obtiene estadísticas de sesiones
-  */
+   * Obtiene estadísticas de sesiones y archivos QR
+   */
   async getStats(): Promise<{
-    total: number;
-    pending: number;
-    completed: number;
-    failed: number;
-    expired: number;
+    sessions: {
+      total: number;
+      pending: number;
+      completed: number;
+      failed: number;
+      expired: number;
+    };
+    qrFiles: {
+      estimatedCount: number;
+      cleanupRecommended: boolean;
+    };
   }> {
     let pending = 0;
     let completed = 0;
     let failed = 0;
     let expired = 0;
+    let sessionsWithQR = 0;
 
     const sessions = await this.redisClient.keys('whatsapp:session:*');
     for (const sessionId of sessions) {
       const session = await this.getSession(sessionId);
       if (!session) continue;
+
+      if (session.qrCodeUrl) sessionsWithQR++;
 
       switch (session.status) {
         case 'pending': pending++; break;
@@ -165,24 +237,37 @@ export class AuthSessionService {
       }
     }
 
+    // Estimar archivos QR basados en sesiones activas con QR
+    const estimatedQRFiles = sessionsWithQR;
+    const cleanupRecommended = estimatedQRFiles > 50; // Recomendar limpieza si hay más de 50 QRs
+
     return {
-      failed,
-      pending,
-      expired,
-      completed,
-      total: sessions.length,
+      sessions: {
+        total: sessions.length,
+        pending,
+        completed,
+        failed,
+        expired,
+      },
+      qrFiles: {
+        estimatedCount: estimatedQRFiles,
+        cleanupRecommended,
+      }
     };
   }
 
   /**
    * Elimina la sesión serializada almacenada
   */
-  async deleteSession(sessionId: string): Promise<void> {
+  async deleteSession(channelId: string): Promise<void> {
+    const session = await this.getSessionByChannel(channelId);
+    if (!session) return;
+
     try {
-      await this.redisClient.del(`whatsapp:session:${sessionId}`);
-      console.log(`🗑️ Sesión serializada eliminada: ${sessionId}`);
+      await this.redisClient.del(`whatsapp:session:${session.id}`);
+      console.log(`🗑️ Sesión serializada eliminada: ${session.id}`);
     } catch (error) {
-      console.error(`Error eliminando sesión serializada: ${sessionId}:`, error);
+      console.error(`Error eliminando sesión serializada: ${session.id}:`, error);
     }
   }
 

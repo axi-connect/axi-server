@@ -55,48 +55,40 @@ export class ChannelAuthUseCases {
         const { name, config, type, company_id, credentials, expires_at, provider_account, provider, default_agent_id } = input;
 
         // Validar que se proporcionen credenciales
-        if (!credentials) {
-        throw new HttpError(400, 'Credentials are required for OAuth providers');
-        }
+        if (!credentials) throw new HttpError(400, 'Credentials are required for OAuth providers');
 
         // Validar credenciales con el proveedor
         const healthCheck = await this.healthCheckService.validateCredentials(provider, credentials, config);
 
-        if (!healthCheck.isValid) {
-        throw new HttpError(400, `Invalid credentials: ${healthCheck.error}`);
-        }
+        if (!healthCheck.isValid) throw new HttpError(400, `Invalid credentials: ${healthCheck.error}`);
 
         // Crear credenciales
         const credentialData = {
-        channel_id: '', // Will be updated after channel creation
-        provider,
-        credentials,
-        expires_at
+            channel_id: '', // Will be updated after channel creation
+            provider,
+            credentials,
+            expires_at
         };
 
         const credential = await this.credentialRepository.create(credentialData);
 
         try {
-        // Crear canal activo (ya validado)
-        const channelData: CreateChannelData = {
-            is_active: true,
-            credentials_id: credential.id,
-            name, type, company_id, provider_account, provider, default_agent_id
-        };
+            // Crear canal activo (ya validado)
+            const channelData: CreateChannelData = {
+                credentials_id: credential.id,
+                name, type, company_id, provider_account, provider, default_agent_id
+            };
 
-        const channel = await this.channelRepository.create(channelData);
+            const channel = await this.channelRepository.create(channelData);
 
-        // Actualizar credential con channel_id y activar
-        await this.credentialRepository.update(credential.id, {
-            channel_id: channel.id,
-            is_active: true
-        });
+            // Actualizar credential con channel_id y activar
+            await this.credentialRepository.update(credential.id, { channel_id: channel.id, is_active: true});
 
-        return channel;
+            return channel;
         } catch (error) {
-        // Si falla la creación del canal, eliminar las credenciales
-        await this.credentialRepository.delete(credential.id);
-        throw error;
+            // Si falla la creación del canal, eliminar las credenciales
+            await this.credentialRepository.delete(credential.id);
+            throw error;
         }
     }
 
@@ -120,7 +112,6 @@ export class ChannelAuthUseCases {
 
         // Crear canal inactivo (pendiente de autenticación)
         const channelData: CreateChannelData = {
-            is_active: false,
             credentials_id: credentialId,
             provider_account, default_agent_id,
             name, type, config, provider, company_id
@@ -156,7 +147,13 @@ export class ChannelAuthUseCases {
         // Verificar que el canal existe y está pendiente de autenticación
         const channel = await this.channelRepository.findById(channelId);
         if (!channel) throw new HttpError(404, 'Channel not found');
-        if (channel.is_active) throw new HttpError(400, 'Channel is already active');
+
+        let authSession = await this.authSessionService.getSessionByChannel(channelId);
+        
+        if (!authSession) console.log(`📭 No hay sesión serializada para canal ${channelId}`);
+        else console.log(`🔄 Sesión serializada encontrada para canal ${channelId}`);
+
+        if (authSession?.status === 'completed') throw new HttpError(400, 'Channel is already authenticated');
 
         // Generar QR usando el runtime service
         const qrResult = await this.runtimeService.generateQR(channelId);
@@ -173,11 +170,6 @@ export class ChannelAuthUseCases {
 
         // QR generado exitosamente
         const qrCodeUrl = `public/qr-images/${file_name}`;
-
-        let authSession = await this.authSessionService.getSessionByChannel(channelId);
-        
-        if (!authSession) console.log(`📭 No hay sesión serializada para canal ${channelId}`);
-        else console.log(`🔄 Sesión serializada encontrada para canal ${channelId}`);
         
         authSession = !authSession 
         ? await this.authSessionService.createSession(channelId, channel.provider, qrResult, qrCodeUrl)
@@ -193,56 +185,6 @@ export class ChannelAuthUseCases {
             sessionId: authSession.id,
             expiresAt: authSession.expiresAt
         };
-    }
-
-    /**
-     * Completa la autenticación de un canal
-     */
-    async completeChannelAuth(channelId: string, sessionId: string, metadata?: any): Promise<ChannelEntity> {
-        // Verificar que el canal existe
-        const channel = await this.channelRepository.findById(channelId);
-        if (!channel) throw new HttpError(404, 'Channel not found');
-
-        // Verificar la sesión
-        const authSession = await this.authSessionService.getSession(sessionId);
-        if (!authSession || authSession.channelId !== channelId) throw new HttpError(400, 'Invalid authentication session');
-
-        // Verificar si el cliente de WhatsApp está autenticado
-        const whatsappProvider = await this.getWhatsappProvider(channelId, channel.config, channel.company_id);
-        const isAuthenticated = await whatsappProvider.isAuthenticated();
-        if (!isAuthenticated) throw new HttpError(400, 'WhatsApp client is not authenticated');
-
-        // Completar la sesión de autenticación
-        const completedSession = this.authSessionService.completeSession(sessionId, metadata);
-
-        // Activar el canal
-        const updatedChannel = await this.channelRepository.update(channelId, { is_active: true });
-
-        // Actualizar las credenciales si existen
-        if (channel.credentials_id) {
-        await this.credentialRepository.update(channel.credentials_id, { credentials: completedSession, is_active: true });
-        }
-
-        return updatedChannel;
-    }
-
-    /**
-     * Obtiene instancia de WhatsappProvider desde el runtime service
-    */
-    private async getWhatsappProvider(channelId: string, config: any, companyId: number): Promise<any> {
-        // Verificar si el canal está activo en runtime
-        if (!this.runtimeService.isChannelActive(channelId)) {
-            // Intentar iniciar el canal si no está activo
-            await this.runtimeService.startChannel(channelId);
-        }
-
-        // Obtener provider desde runtime service
-        const provider = (this.runtimeService as any).activeProviders.get(channelId);
-        if (!provider) {
-            throw new HttpError(500, `No se pudo obtener provider para canal ${channelId}`);
-        }
-
-        return provider;
     }
 
     /**

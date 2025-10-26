@@ -159,7 +159,6 @@ export class ChannelRuntimeService {
             isAuthenticated,
             type: channel.type,
             provider: channel.provider,
-            isActive: channel.is_active,
             lastActivity: new Date() // TODO: Implementar tracking de actividad real
         };
     }

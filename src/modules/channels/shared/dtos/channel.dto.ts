@@ -17,14 +17,14 @@ export interface ChannelResponseDto {
   name: string;
   type: ChannelType;
   config?: any;
-  provider: ChannelProvider;
-  is_active: boolean;
-  provider_account: string;
-  default_agent_id?: number;
   company_id: number;
   created_at: string;
   updated_at: string;
   deleted_at?: string;
+  provider_account: string;
+  provider: ChannelProvider;
+  is_active: boolean | null;
+  default_agent_id?: number|null;
 }
 
 export interface UpdateChannelRequestDto {

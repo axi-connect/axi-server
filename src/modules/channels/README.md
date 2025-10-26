@@ -118,13 +118,16 @@ src/modules/channels/
 - **Múltiples conexiones por usuario**: Un usuario puede tener conexiones simultáneas a diferentes namespaces
 
 #### **10. ✅ AuthSessionService**
-- **Función**: Gestión de sesiones de autenticación con persistencia en Redis
+- **Función**: Gestión de sesiones de autenticación con persistencia en Redis y limpieza automática de QRs
 - **Características**:
   - Integración completa con Redis para almacenamiento de sesiones serializadas
-  - Métodos de persistencia: `saveSerializedSession()`,`getSerializedSession()`, `deleteSerializedSession()`
+  - **Limpieza automática de QRs**: Eliminación automática de archivos QR tras autenticación exitosa
+  - Métodos de persistencia: `saveSerializedSession()`, `getSerializedSession()`, `deleteSerializedSession()`
   - Recuperación automática de sesiones al reinicio del backend
   - Evita re-escanear QR después de reinicios del sistema
   - Gestión de expiración de sesiones con limpieza automática
+  - **Limpieza de sesiones expiradas**: Método `cleanupExpiredSessions()` para mantenimiento
+  - **Optimización de espacio**: Evita acumulación innecesaria de archivos QR
   - Map en memoria con respaldo en Redis para alta performance
 
 #### **11. ✅ ChannelsContainer (Dependency Injection)**
@@ -341,7 +344,16 @@ src/modules/channels/
   });
   ```
 
-#### **12. ✅ Recuperación de Errores Avanzada**
+#### **12. ✅ Limpieza Automática de QRs**
+- **Eliminación automática**: QRs eliminados inmediatamente tras autenticación exitosa
+- **Limpieza programada**: Cron jobs ejecutan limpieza cada hora y diariamente a las 2 AM
+- **Optimización de espacio**: Evita acumulación innecesaria de archivos en disco
+- **Manejo robusto de errores**: Continúa operación aunque falle eliminación de QR
+- **Limpieza manual**: Métodos administrativos para limpieza bajo demanda
+- **Estadísticas de limpieza**: Monitoreo del estado de QRs y sesiones expiradas
+- **QRCleanupService**: Servicio dedicado para gestión de limpieza de QRs
+
+#### **13. ✅ Recuperación de Errores Avanzada**
 - **Manejo de EBUSY**: Sesiones corruptas detectadas y limpiadas automáticamente
 - **ProtocolError de Puppeteer**: Errores `Target closed`, `Session closed` manejados gracefully
 - **Timeouts en operaciones**: `Promise.race` para evitar operaciones colgadas
@@ -363,8 +375,7 @@ Gestiona la configuración y estado de los canales de comunicación.
 | `GET` | `/channels/:id` | Obtener canal específico |
 | `PUT` | `/channels/:id` | Actualizar canal |
 | `DELETE` | `/channels/:id` | Eliminar canal (soft delete) |
-| `PUT` | `/channels/:id/activate` | Activar canal |
-| `PUT` | `/channels/:id/deactivate` | Desactivar canal |
+| `GET` | `/channels/:id/qr` | Obtener código QR para autenticación |
 
 ### Conversaciones (Conversations)
 Maneja las conversaciones activas en cada canal.

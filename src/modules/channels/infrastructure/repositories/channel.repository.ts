@@ -1,4 +1,4 @@
-import { ChannelType } from '@prisma/client';
+import { Channel, ChannelType } from '@prisma/client';
 import { PrismaClient } from '@prisma/client';
 import { ChannelEntity, CreateChannelData, UpdateChannelData } from '../../domain/entities/channel.js';
 import { ChannelRepositoryInterface, ChannelSearchCriteria } from '../../domain/repositories/channel-repository.interface.js';
@@ -96,7 +96,6 @@ export class ChannelRepository implements ChannelRepositoryInterface {
         type: data.type,
         config: data.config,
         provider: data.provider,
-        is_active: data.is_active,
         provider_account: data.provider_account,
         default_agent_id: data.default_agent_id,
         updated_at: new Date()
@@ -134,7 +133,6 @@ export class ChannelRepository implements ChannelRepositoryInterface {
       where: {
         company_id,
         deleted_at: null,
-        is_active: true
       }
     });
   }
@@ -151,7 +149,6 @@ export class ChannelRepository implements ChannelRepositoryInterface {
       where: {
         type,
         company_id,
-        is_active: true,
         deleted_at: null
       }
     });
@@ -174,7 +171,6 @@ export class ChannelRepository implements ChannelRepositoryInterface {
   async findActiveChannels(): Promise<ChannelEntity[]> {
     const channels = await this.prisma.channel.findMany({
       where: {
-        is_active: true,
         deleted_at: null
       },
       include: {
@@ -186,21 +182,21 @@ export class ChannelRepository implements ChannelRepositoryInterface {
     return channels.map(channel => this.mapToEntity(channel));
   }
 
-  private mapToEntity(channel: any): ChannelEntity {
+  private mapToEntity(channel: Channel): ChannelEntity {
     return {
       id: channel.id,
+      is_active: null,
       name: channel.name,
       type: channel.type,
       config: channel.config,
       provider: channel.provider,
-      is_active: channel.is_active,
       credentials_id: channel.credentials_id,
       provider_account: channel.provider_account,
       default_agent_id: channel.default_agent_id,
       company_id: channel.company_id,
       created_at: channel.created_at,
       updated_at: channel.updated_at,
-      deleted_at: channel.deleted_at
+      deleted_at: channel.deleted_at ?? undefined
     };
   }
 }

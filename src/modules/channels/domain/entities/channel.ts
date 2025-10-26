@@ -3,17 +3,17 @@ import { ChannelType, ChannelProvider } from '@prisma/client';
 export interface ChannelEntity {
   id: string;
   name: string;
-  type: ChannelType;
   config?: any;
-  provider: ChannelProvider;
-  is_active: boolean;
-  credentials_id: string | null;
-  provider_account: string;
-  default_agent_id?: number;
-  company_id: number;
   created_at: Date;
   updated_at: Date;
   deleted_at?: Date;
+  type: ChannelType;
+  company_id: number;
+  provider_account: string;
+  is_active: boolean | null;
+  provider: ChannelProvider;
+  default_agent_id?: number|null;
+  credentials_id: string | null;
 }
 
 export interface CreateChannelData {
@@ -21,7 +21,6 @@ export interface CreateChannelData {
   config?: any;
   type: ChannelType;
   company_id: number;
-  is_active: boolean;
   credentials_id?: string;
   provider_account: string;
   provider: ChannelProvider;
@@ -32,7 +31,6 @@ export interface UpdateChannelData {
   name?: string;
   config?: any;
   type?: ChannelType;
-  is_active?: boolean;
   credentials_id?: string;
   provider_account?: string;
   default_agent_id?: number;
@@ -43,11 +41,10 @@ export interface ChannelStatus {
   channelId: string;
   provider: string;
   type: string;
-  isActive: boolean;
-  isConnected: boolean;
-  isAuthenticated: boolean;
   lastActivity?: Date;
+  isConnected: boolean;
   errorMessage?: string;
+  isAuthenticated: boolean;
 }
 
 export interface RuntimeMessage {

@@ -1,8 +1,11 @@
 import { Request, Response } from 'express';
 import { HttpError } from '@/shared/errors/http.error.js';
 import { ResponseDto } from '@/shared/dto/response.dto.js';
-import { ChannelUseCases, CreateChannelInput, UpdateChannelInput, ChannelSearchInput } from '@/modules/channels/application/use-cases/channel.usecases.js';
-import { CreateChannelRequestDto, ChannelResponseDto, UpdateChannelRequestDto, ChannelSearchQueryDto } from '@/modules/channels/shared/dtos/channel.dto.js';
+import { CronRepository } from '@/services/cron-jobs/cron.repository.js';
+import { CreateChannelInput } from '@/modules/channels/application/use-cases/channel-auth.usecases.js';
+import { ChannelUseCases, UpdateChannelInput, ChannelSearchInput } from '@/modules/channels/application/use-cases/channel.usecases.js';
+import { CreateChannelRequestDto, ChannelResponseDto, UpdateChannelRequestDto } from '@/modules/channels/shared/dtos/channel.dto.js';
+import { ChannelEntity } from '../../domain/entities/channel.js';
 
 export class ChannelController {
   constructor(private channelUseCases: ChannelUseCases) {}
@@ -17,6 +20,23 @@ export class ChannelController {
     timeZone: 'America/Bogota' // Especificar la zona horaria
   });
 
+  private mapToResponseDto(channel: ChannelEntity): ChannelResponseDto {
+    return {
+      id: channel.id,
+      name: channel.name,
+      type: channel.type,
+      config: channel.config,
+      provider: channel.provider,
+      is_active: channel.is_active,
+      company_id: channel.company_id,
+      provider_account: channel.provider_account,
+      default_agent_id: channel.default_agent_id,
+      created_at: this.formatter.format(channel.created_at),
+      updated_at: this.formatter.format(channel.updated_at),
+      deleted_at: channel.deleted_at ? this.formatter.format(channel.deleted_at) : undefined
+    };
+  };
+
   createChannel = async (req: Request, res: Response): Promise<void> => {
     try {
       const body: CreateChannelRequestDto = req.body;
@@ -26,22 +46,9 @@ export class ChannelController {
         expires_at: body.expires_at ? new Date(body.expires_at) : undefined
       };
 
-      const channel = await this.channelUseCases.createChannel(input);
+      const {channel} = await this.channelUseCases.createChannel(input);
 
-      const response: ChannelResponseDto = {
-        id: channel.id,
-        name: channel.name,
-        type: channel.type,
-        config: channel.config,
-        provider: channel.provider,
-        is_active: channel.is_active,
-        company_id: channel.company_id,
-        provider_account: channel.provider_account,
-        default_agent_id: channel.default_agent_id,
-        created_at: this.formatter.format(channel.created_at),
-        updated_at: this.formatter.format(channel.updated_at),
-        deleted_at: channel.deleted_at ? this.formatter.format(channel.deleted_at) : undefined
-      };
+      const response: ChannelResponseDto = this.mapToResponseDto(channel);
 
       const responseDto = new ResponseDto(true, 'Channel created successfully', response, 201);
       res.status(201).json(responseDto);
@@ -58,20 +65,7 @@ export class ChannelController {
 
       const channel = await this.channelUseCases.getChannelById(id);
 
-      const response: ChannelResponseDto = {
-        id: channel.id,
-        name: channel.name,
-        type: channel.type,
-        config: channel.config,
-        provider: channel.provider,
-        is_active: channel.is_active,
-        provider_account: channel.provider_account,
-        default_agent_id: channel.default_agent_id,
-        company_id: channel.company_id,
-        created_at: this.formatter.format(channel.created_at),
-        updated_at: this.formatter.format(channel.updated_at),
-        deleted_at: channel.deleted_at ? this.formatter.format(channel.deleted_at) : undefined
-      };
+      const response: ChannelResponseDto = this.mapToResponseDto(channel);
 
       const responseDto = new ResponseDto(true, 'Channel retrieved successfully', response, 200);
       res.status(200).json(responseDto);
@@ -100,20 +94,7 @@ export class ChannelController {
 
       const result = await this.channelUseCases.getChannelsByCompany(company_id, searchInput);
 
-      const channels: ChannelResponseDto[] = result.channels.map((channel: any) => ({
-        id: channel.id,
-        name: channel.name,
-        type: channel.type,
-        config: channel.config,
-        provider: channel.provider,
-        is_active: channel.is_active,
-        provider_account: channel.provider_account,
-        default_agent_id: channel.default_agent_id,
-        company_id: channel.company_id,
-        created_at: channel.created_at.toISOString(),
-        updated_at: channel.updated_at.toISOString(),
-        deleted_at: channel.deleted_at?.toISOString()
-      }));
+      const channels: ChannelResponseDto[] = result.channels.map((channel: any) => this.mapToResponseDto(channel));
 
       const responseDto = new ResponseDto(true, 'Channels retrieved successfully', {
         channels,
@@ -138,29 +119,15 @@ export class ChannelController {
       const input: UpdateChannelInput = {
         name: body.name,
         type: body.type,
+        config: body.config,
         provider: body.provider,
         provider_account: body.provider_account,
-        config: body.config,
-        is_active: body.is_active,
         default_agent_id: body.default_agent_id
       };
 
       const channel = await this.channelUseCases.updateChannel(id, input);
 
-      const response: ChannelResponseDto = {
-        id: channel.id,
-        name: channel.name,
-        type: channel.type,
-        config: channel.config,
-        provider: channel.provider,
-        is_active: channel.is_active,
-        provider_account: channel.provider_account,
-        default_agent_id: channel.default_agent_id,
-        company_id: channel.company_id,
-        created_at: channel.created_at.toISOString(),
-        updated_at: channel.updated_at.toISOString(),
-        deleted_at: channel.deleted_at?.toISOString()
-      };
+      const response: ChannelResponseDto = this.mapToResponseDto(channel);
 
       const responseDto = new ResponseDto(true, 'Channel updated successfully', response, 200);
       res.status(200).json(responseDto);
@@ -186,66 +153,6 @@ export class ChannelController {
     }
   };
 
-  activateChannel = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { id } = req.params;
-
-      const channel = await this.channelUseCases.activateChannel(id);
-
-      const response: ChannelResponseDto = {
-        id: channel.id,
-        name: channel.name,
-        type: channel.type,
-        config: channel.config,
-        provider: channel.provider,
-        is_active: channel.is_active,
-        provider_account: channel.provider_account,
-        default_agent_id: channel.default_agent_id,
-        company_id: channel.company_id,
-        created_at: channel.created_at.toISOString(),
-        updated_at: channel.updated_at.toISOString(),
-        deleted_at: channel.deleted_at?.toISOString()
-      };
-
-      const responseDto = new ResponseDto(true, 'Channel activated successfully', response, 200);
-      res.status(200).json(responseDto);
-    } catch (error: any) {
-      const statusCode = error instanceof HttpError ? error.statusCode : 500;
-      const responseDto = new ResponseDto(false, error.message || 'Internal server error', null, statusCode);
-      res.status(statusCode).json(responseDto);
-    }
-  };
-
-  deactivateChannel = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { id } = req.params;
-
-      const channel = await this.channelUseCases.deactivateChannel(id);
-
-      const response: ChannelResponseDto = {
-        id: channel.id,
-        name: channel.name,
-        type: channel.type,
-        config: channel.config,
-        provider: channel.provider,
-        is_active: channel.is_active,
-        provider_account: channel.provider_account,
-        default_agent_id: channel.default_agent_id,
-        company_id: channel.company_id,
-        created_at: channel.created_at.toISOString(),
-        updated_at: channel.updated_at.toISOString(),
-        deleted_at: channel.deleted_at?.toISOString()
-      };
-
-      const responseDto = new ResponseDto(true, 'Channel deactivated successfully', response, 200);
-      res.status(200).json(responseDto);
-    } catch (error: any) {
-      const statusCode = error instanceof HttpError ? error.statusCode : 500;
-      const responseDto = new ResponseDto(false, error.message || 'Internal server error', null, statusCode);
-      res.status(statusCode).json(responseDto);
-    }
-  };
-
   getChannelQR = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
@@ -255,36 +162,6 @@ export class ChannelController {
         qrCode, qrCodeUrl, sessionId,
         expiresAt: this.formatter.format(expiresAt)
       }, 200);
-      res.status(200).json(responseDto);
-    } catch (error: any) {
-      const statusCode = error instanceof HttpError ? error.statusCode : 500;
-      const responseDto = new ResponseDto(false, error.message || 'Internal server error', null, statusCode);
-      res.status(statusCode).json(responseDto);
-    }
-  };
-
-  completeChannelAuth = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { id } = req.params;
-      const { sessionId, metadata } = req.body;
-      const channel = await this.channelUseCases.completeChannelAuth(id, sessionId, metadata);
-
-      const response: ChannelResponseDto = {
-        id: channel.id,
-        name: channel.name,
-        type: channel.type,
-        config: channel.config,
-        provider: channel.provider,
-        is_active: channel.is_active,
-        company_id: channel.company_id,
-        provider_account: channel.provider_account,
-        default_agent_id: channel.default_agent_id,
-        created_at: this.formatter.format(channel.created_at),
-        updated_at: this.formatter.format(channel.updated_at),
-        deleted_at: channel.deleted_at ? this.formatter.format(channel.deleted_at) : undefined
-      };
-
-      const responseDto = new ResponseDto(true, 'Channel authentication completed successfully', response, 200);
       res.status(200).json(responseDto);
     } catch (error: any) {
       const statusCode = error instanceof HttpError ? error.statusCode : 500;

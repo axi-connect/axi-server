@@ -64,37 +64,12 @@ export function createChannelRouter(): Router {
     channelController.deleteChannel
   );
 
-  // PUT /:id/activate - Activate channel
-  channelRouter.put(
-    '/:id/activate',
-    authorize('/channels', 'update'),
-    ChannelValidator.validateIdParam,
-    channelController.activateChannel
-  );
-
-  // PUT /:id/deactivate - Deactivate channel
-  channelRouter.put(
-    '/:id/deactivate',
-    authorize('/channels', 'update'),
-    ChannelValidator.validateIdParam,
-    channelController.deactivateChannel
-  );
-
   // GET /:id/qr - Get QR code for authentication
   channelRouter.get(
     '/:id/qr',
     authorize('/channels', 'read'),
     ChannelValidator.validateIdParam,
     channelController.getChannelQR
-  );
-
-  // POST /:id/auth - Complete channel authentication
-  channelRouter.post(
-    '/:id/auth',
-    authorize('/channels', 'update'),
-    ChannelValidator.validateIdParam,
-    ChannelValidator.validateCompleteAuth,
-    channelController.completeChannelAuth
   );
 
   return channelRouter;

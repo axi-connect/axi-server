@@ -1,6 +1,5 @@
 import cron from 'node-cron';
-import { ScheduledTask } from 'node-cron';
-
+// import { ScheduledTask } from 'node-cron';
 export class CronRepository {
     static createCronJob(cronExpression: string, callback: () => void) {
         cron.schedule(cronExpression, callback);
@@ -16,4 +15,3 @@ export class CronRepository {
         });
     }
 }
-

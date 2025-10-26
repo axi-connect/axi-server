@@ -219,64 +219,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /channels/{id}/activate:
-    put:
-      tags:
-        - Channels
-      summary: Activate channel
-      description: Activates a previously deactivated communication channel
-      operationId: activateChannel
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-          description: Channel unique identifier
-      responses:
-        '200':
-          description: Channel activated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChannelResponse'
-        '404':
-          description: Channel not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /channels/{id}/deactivate:
-    put:
-      tags:
-        - Channels
-      summary: Deactivate channel
-      description: Deactivates a communication channel without deleting it
-      operationId: deactivateChannel
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-          description: Channel unique identifier
-      responses:
-        '200':
-          description: Channel deactivated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChannelResponse'
-        '404':
-          description: Channel not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
   /channels/{id}/qr:
     get:
       tags:
@@ -301,47 +243,6 @@ paths:
                 $ref: '#/components/schemas/QRCodeResponse'
         '400':
           description: Channel is already active or QR auth not supported
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Channel not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /channels/{id}/auth:
-    post:
-      tags:
-        - Authentication
-      summary: Complete channel authentication
-      description: Completes the authentication process for a channel using a session ID
-      operationId: completeChannelAuth
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-          description: Channel unique identifier
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CompleteAuthRequest'
-      responses:
-        '200':
-          description: Channel authentication completed successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChannelResponse'
-        '400':
-          description: Invalid session or authentication failed
           content:
             application/json:
               schema:

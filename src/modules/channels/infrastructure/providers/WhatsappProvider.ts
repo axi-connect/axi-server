@@ -136,6 +136,16 @@ export class WhatsappProvider extends BaseProvider {
       }
     });
 
+    this.client.on('ready', async () => {
+      console.log(`🚀 WhatsApp listo para canal ${this.channelId}`);
+      // this.authenticated = true;
+      // this.config.emitEventCallback({
+      //   event: 'channel.ready',
+      //   channelId: this.channelId,
+      //   companyId: this.config.company_id,
+      // });
+    });
+
     process.on('unhandledRejection', (error: any) => {
       if (error.message.includes('Protocol error') && error.message.includes('Session closed')) {
         console.warn('Suppressed Puppeteer error:', error.message);
@@ -277,7 +287,7 @@ export class WhatsappProvider extends BaseProvider {
             data: { reason: 'authenticated' },
             timestamp: new Date()
           });
-
+          await this.authSessionService.completeSession(this.channelId, { reason: 'authenticated' });
           cleanup();
           resolve('');
         });
@@ -381,8 +391,7 @@ export class WhatsappProvider extends BaseProvider {
     try {
       // Limpiar sesión serializada de Redis
       try {
-        const authSession = await this.authSessionService.getSessionByChannel(this.channelId);
-        if (authSession) await this.authSessionService.deleteSession(authSession.id);
+        await this.authSessionService.deleteSession(this.channelId);
       } catch (error) {
         console.error(`Error eliminando sesión serializada para canal ${this.channelId}:`, error);
       }

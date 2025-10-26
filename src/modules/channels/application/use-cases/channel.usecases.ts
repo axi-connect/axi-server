@@ -7,12 +7,11 @@ import { ChannelRepositoryInterface, ChannelSearchCriteria } from '../../domain/
 
 export interface UpdateChannelInput {
   name?: string;
-  type?: ChannelType;
-  provider?: ChannelProvider;
-  provider_account?: string;
   config?: any;
-  is_active?: boolean;
+  type?: ChannelType;
+  provider_account?: string;
   default_agent_id?: number;
+  provider?: ChannelProvider;
 }
 
 export interface ChannelSearchInput {
@@ -72,10 +71,9 @@ export class ChannelUseCases {
     const updateData: UpdateChannelData = {
       name: input.name,
       type: input.type,
+      config: input.config,
       provider: input.provider,
       provider_account: input.provider_account,
-      config: input.config,
-      is_active: input.is_active,
       default_agent_id: input.default_agent_id
     };
 
@@ -84,20 +82,10 @@ export class ChannelUseCases {
 
   async deleteChannel(id: string): Promise<boolean> {
     const channel = await this.channelRepository.findById(id);
-    if (!channel) {
-      throw new HttpError(404, 'Channel not found');
-    }
+    if (!channel) throw new HttpError(404, 'Channel not found');
 
     // Soft delete the channel
     return this.channelRepository.softDelete(id);
-  }
-
-  async activateChannel(id: string): Promise<ChannelEntity> {
-    return this.channelRepository.update(id, { is_active: true });
-  }
-
-  async deactivateChannel(id: string): Promise<ChannelEntity> {
-    return this.channelRepository.update(id, { is_active: false });
   }
 
   async getActiveChannelsByType(type: ChannelType, company_id: number): Promise<ChannelEntity[]> {
@@ -109,13 +97,6 @@ export class ChannelUseCases {
   */
   async getChannelQR(channelId: string): Promise<{ qrCode: string; qrCodeUrl: string; sessionId: string; expiresAt: Date }> {
     return this.channelAuthUseCases.getChannelQR(channelId);
-  }
-
-  /**
-   * Delega la completación de autenticación al caso de uso especializado
-  */
-  async completeChannelAuth(channelId: string, sessionId: string, metadata?: any): Promise<ChannelEntity> {
-    return this.channelAuthUseCases.completeChannelAuth(channelId, sessionId, metadata);
   }
 
   /**
