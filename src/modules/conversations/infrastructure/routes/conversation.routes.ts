@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authorize } from '@/middlewares/rbac.middleware.js';
-import { ConversationController } from '../controllers/conversation.controller.js';
-import { ConversationRepository } from '../repositories/conversation.repository.js';
-import { ConversationUseCases } from '../../application/use-cases/conversation.usecases.js';
 import { MessageController } from '../controllers/message.controller.js';
 import { MessageRepository } from '../repositories/message.repository.js';
 import { MessageUseCases } from '../../application/use-cases/message.usecases.js';
+import { ConversationController } from '../controllers/conversation.controller.js';
+import { ConversationUseCases } from '../../application/use-cases/conversation.usecases.js';
+import { ConversationRepository } from '@/modules/conversations/infrastructure/repositories/conversation.repository.js';
 
 /**
  * Create and configure conversation routes

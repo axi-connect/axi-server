@@ -1,4 +1,4 @@
-import { MessageAttachmentEntity, CreateAttachmentData } from '@/modules/channels/domain/entities/attachment.js';
+import { MessageAttachmentEntity, CreateAttachmentData } from '@/modules/conversations/domain/entities/attachment.js';
 
 export interface CreateAttachmentInput {
   message_id: string;

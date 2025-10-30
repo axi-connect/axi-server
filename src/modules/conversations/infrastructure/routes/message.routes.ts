@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authorize } from '@/middlewares/rbac.middleware.js';
-import { MessageController } from '../controllers/message.controller.js';
+import { MessageController } from '../../../conversations/infrastructure/controllers/message.controller.js';
 import { MessageRepository } from '../repositories/message.repository.js';
-import { MessageUseCases } from '../../application/use-cases/message.usecases.js';
+import { MessageUseCases } from '../../../conversations/application/use-cases/message.usecases.js';
 
 /**
  * Create and configure message routes

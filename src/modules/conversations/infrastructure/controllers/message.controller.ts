@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { HttpError } from '@/shared/errors/http.error.js';
 import { ResponseDto } from '@/shared/dto/response.dto.js';
-import { MessageUseCases } from '@/modules/channels/application/use-cases/message.usecases.js';
+import { MessageUseCases } from '@/modules/conversations/application/use-cases/message.usecases.js';
 
 export class MessageController {
   constructor(private messageUseCases: MessageUseCases) {}

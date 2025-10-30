@@ -4,8 +4,8 @@ import { authenticate } from '@/middlewares/auth.middleware.js';
 
 // Import modular router factories
 import { createChannelRouter } from './channel.routes.js';
-import { createMessageRouter } from './message.routes.js';
-import { createConversationRouter } from './conversation.routes.js';
+import { createMessageRouter } from '@/modules/conversations/infrastructure/routes/message.routes.js';
+import { createConversationRouter } from '@/modules/conversations/infrastructure/routes/conversation.routes.js';
 
 // Initialize Prisma client
 const prisma = new PrismaClient();

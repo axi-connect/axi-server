@@ -21,12 +21,12 @@ export type {
   ChannelJoinResponse
 } from './channel.handler.js';
 // Handlers de mensajes
-export { MessageHandler, createMessageHandler } from './message.handler.js';
+export { MessageHandler, createMessageHandler } from '@/modules/conversations/infrastructure/handlers/message.handler.js';
 export type {
   SendMessageRequest,
   MessageSentResponse,
   IncomingMessageData
-} from './message.handler.js';
+} from '@/modules/conversations/infrastructure/handlers/message.handler.js';
 // Handlers del sistema
 export { SystemHandler, createSystemHandler } from './system.handler.js';
 export type {

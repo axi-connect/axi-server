@@ -1,6 +1,6 @@
 import { ParticipantType } from '@prisma/client';
-import { ConversationEntity, CreateConversationData, UpdateConversationData } from '../../domain/entities/conversation.js';
-import { ConversationRepositoryInterface, ConversationSearchCriteria } from '../../domain/repositories/conversation-repository.interface.js';
+import { ConversationEntity, CreateConversationData, UpdateConversationData } from '../../../conversations/domain/entities/conversation.js';
+import { ConversationRepositoryInterface, ConversationSearchCriteria } from '../../../conversations/domain/repositories/conversation-repository.interface.js';
 
 export interface CreateConversationInput {
   company_id: number;

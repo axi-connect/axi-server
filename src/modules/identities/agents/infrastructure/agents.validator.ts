@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { ChannelType } from '@prisma/client';
 import { NextFunction, Request, Response } from "express";
 import { ResponseDto } from "@/shared/dto/response.dto.js";
 
@@ -31,7 +32,7 @@ const agentBaseSchema = {
     name: Joi.string().min(3).label('nombre'),
     phone: Joi.string().min(3).label('teléfono'),
     status: Joi.string().valid('available','busy','away','offline','training','meeting','on_break').label('estado'),
-    channel: Joi.string().valid('whatsapp','email','call','instagram','facebook','telegram').label('canal'),
+    channel: Joi.string().valid(...Object.values(ChannelType)).label('canal'),
     company_id: Joi.number().label('empresa'),
     character_id: Joi.alternatives().try(Joi.number(), Joi.valid(null)).label('personaje'),
     skills: Joi.array().items(Joi.string().trim()).min(1).label('habilidades'),
