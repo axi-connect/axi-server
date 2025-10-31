@@ -1,15 +1,15 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authorize } from '@/middlewares/rbac.middleware.js';
-import { MessageController } from '../../../conversations/infrastructure/controllers/message.controller.js';
-import { MessageRepository } from '../repositories/message.repository.js';
-import { MessageUseCases } from '../../../conversations/application/use-cases/message.usecases.js';
+import { MessageUseCases } from '@/modules/conversations/application/use-cases/message.usecases.js';
+import { MessageController } from '@/modules/conversations/infrastructure/controllers/message.controller.js';
+import { MessageRepository } from '@/modules/conversations/infrastructure/repositories/message.repository.js';
 
 /**
  * Create and configure message routes
  * @param prisma - Prisma client instance
  * @returns Configured message router
- */
+*/
 export function createMessageRouter(prisma: PrismaClient): Router {
   // Initialize repository
   const messageRepository = new MessageRepository(prisma);

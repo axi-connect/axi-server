@@ -18,12 +18,13 @@ ChannelsRouter.use(authenticate);
 
 // Create and mount modular routers with proper dependency injection
 export function initializeChannelsRouter() {
-    // /channels/*
-    ChannelsRouter.use('/', createChannelRouter());
+    // Mount specific routers BEFORE the generic '/' router to avoid route capture
     // /channels/messages/*
     ChannelsRouter.use('/messages', createMessageRouter(prisma));
     // /channels/conversations/*
     ChannelsRouter.use('/conversations', createConversationRouter(prisma));
+    // /channels/*
+    ChannelsRouter.use('/', createChannelRouter());
 
     return ChannelsRouter;
 }

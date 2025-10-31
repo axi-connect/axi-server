@@ -10,6 +10,7 @@ import { getRedisClient, type RedisClient } from '@/database/redis.js';
 import { AuthSessionService } from '../application/services/auth-session.service.js';
 import { ChannelRuntimeService } from '../application/services/channel-runtime.service.js';
 import { ChannelWebSocketGateway } from '../application/services/channel-websocket.gateway.js';
+import { CompaniesRepository } from '@/modules/identities/companies/infrastructure/companies.repository.js';
 
 // Use Cases
 import { ChannelUseCases } from '../application/use-cases/channel.usecases.js';
@@ -53,11 +54,13 @@ export class ChannelsContainer {
         // Connect runtime service with WebSocket gateway
         this.runtimeService.setWebSocketCallback((event) => { this.webSocketGateway.handleWebSocketEvent(event) });
 
+        const companiesRepository = new CompaniesRepository();
         this.channelAuthUseCases = new ChannelAuthUseCases(
             this.runtimeService,
             this.authSessionService,
             this.channelRepository,
-            this.credentialRepository
+            this.credentialRepository,
+            companiesRepository
         );
         
         // Initialize use cases

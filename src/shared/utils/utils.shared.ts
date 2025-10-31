@@ -9,6 +9,12 @@ export function generateCode():string{
     return `${randomLetters}${randomNumbers}`;
 }
 
+export const parseDateSafe = (value: unknown): Date | undefined => {
+    if (typeof value !== 'string' || value.length === 0) return undefined;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+};
+
 export function normalizeInternationalPhone(phone?: string | null): string | null {
     if (!phone) return null;
     const trimmed = phone.trim();

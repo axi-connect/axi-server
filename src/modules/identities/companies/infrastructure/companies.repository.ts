@@ -163,4 +163,16 @@ export class CompaniesRepository{
 
         return {companies: detail, total};
     }
+
+    /**
+     * Verifica si existe una compañía por id
+    */
+    async existsById(company_id:number):Promise<boolean>{
+        try{
+            const company = await this.db.company.findUnique({ where: { id: company_id }, select: { id: true } });
+            return company != null;
+        }catch{
+            return false;
+        }
+    }
 }

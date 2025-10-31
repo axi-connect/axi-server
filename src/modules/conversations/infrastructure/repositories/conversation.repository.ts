@@ -1,22 +1,12 @@
 import { PrismaClient } from '@prisma/client';
-import { ParticipantType } from '@prisma/client';
-import { ConversationEntity, CreateConversationData, UpdateConversationData } from '../../../conversations/domain/entities/conversation.js';
-import { ConversationRepositoryInterface, ConversationSearchCriteria } from '../../../conversations/domain/repositories/conversation-repository.interface.js';
+import { ConversationEntity, CreateConversationData, UpdateConversationData } from '@/modules/conversations/domain/entities/conversation.js';
+import { ConversationRepositoryInterface, ConversationSearchCriteria } from '@/modules/conversations/domain/repositories/conversation-repository.interface.js';
 
 export class ConversationRepository implements ConversationRepositoryInterface {
   constructor(private prisma: PrismaClient) {}
 
   async create(data: CreateConversationData): Promise<ConversationEntity> {
-    const conversation = await this.prisma.conversation.create({
-      data: {
-        company_id: data.company_id,
-        channel_id: data.channel_id,
-        external_id: data.external_id,
-        participant_id: data.participant_id,
-        participant_meta: data.participant_meta,
-        participant_type: data.participant_type
-      }
-    });
+    const conversation = await this.prisma.conversation.create({ data });
 
     return this.mapToEntity(conversation);
   }

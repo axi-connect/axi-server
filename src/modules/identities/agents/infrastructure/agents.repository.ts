@@ -145,4 +145,13 @@ export class AgentsRepository implements AgentsRepositoryInterface{
     async deleteAgent(agent_id:number):Promise<Agent>{
         return await this.db.agent.delete({where: {id: agent_id}})
     }
+
+    async existsById(agent_id:number):Promise<boolean>{
+        try{
+            const ag = await this.db.agent.findUnique({ where: { id: agent_id }, select: { id: true } });
+            return ag != null;
+        }catch{
+            return false;
+        }
+    }
 }

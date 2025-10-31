@@ -1,4 +1,5 @@
 import { ParticipantType } from '@prisma/client';
+import { InputJsonValue } from '@prisma/client/runtime/library';
 
 export interface ConversationEntity {
   id: string;
@@ -20,8 +21,9 @@ export interface CreateConversationData {
   channel_id: string;
   external_id: string;
   participant_id?: string;
-  participant_meta?: any;
+  assigned_agent_id?: number;
   participant_type: ParticipantType;
+  participant_meta?: InputJsonValue | undefined;
 }
 
 export interface UpdateConversationData {
@@ -41,12 +43,10 @@ export type Conversation = {
   created_at: string
   participant: {
     id: string
-    name: string
-    avatar: string
     type: ParticipantType
     meta: Record<string, unknown> | null
   }
-  last_message: {
+  last_message?: {
     id: string
     message: string
     created_at: string
@@ -68,10 +68,10 @@ const conversation1: Conversation = {
   created_at: "2025-10-29T15:30:00Z",
   participant: {
     id: "part_x9y8z7w6",
-    name: "Juan Pérez",
-    avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761806910/1e245de8-23d5-498f-8d60-f9fc77557d40.png",
     type: "lead",
     meta: {
+      name: "Juan Pérez",
+      avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761806910/1e245de8-23d5-498f-8d60-f9fc77557d40.png",
       phone: "+573001234567",
       city: "Bogotá",
     },
@@ -98,11 +98,12 @@ const conversation2: Conversation = {
   updated_at: "2025-10-28T14:45:00Z",
   created_at: "2025-10-28T14:00:00Z",
   participant: {
-      meta: null,
+      meta: {
+        name: "María López",
+        avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761852896/c0836563-8c9c-4982-880d-9fab6fc279f4.png",
+      },
       type: "lead",
       id: "part_n0p1q2r3",
-      name: "María López",
-      avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761852896/c0836563-8c9c-4982-880d-9fab6fc279f4.png",
   },
   last_message: {
       id: "msg_s9t8u7v6",
@@ -126,11 +127,11 @@ const conversation3: Conversation = {
   created_at: "2025-10-30T09:50:00Z",
   participant: {
     id: "part_q9r0s1t2",
-    name: "Andrés Giraldo",
-    avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761856211/0d6e5e4c-d792-4447-b0ca-f42c2a9aca73.png",
     type: "customer",
     meta: {
+      name: "Andrés Giraldo",
       account_tier: "premium",
+      avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761856211/0d6e5e4c-d792-4447-b0ca-f42c2a9aca73.png",
     },
   },
   last_message: {
@@ -154,11 +155,11 @@ const conversation4: Conversation = {
   updated_at: "2025-10-30T09:15:00Z",
   created_at: "2025-10-30T09:10:00Z",
   participant: {
-    id: "part_a5b6c7d8",
-    name: "Bot Automático",
-    avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761854482/04-character-nova-_close-up_pcu8mc.png",
     type: "system",
+    id: "part_a5b6c7d8",
     meta: {
+      name: "Bot Automático",
+      avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761854482/04-character-nova-_close-up_pcu8mc.png",
       intent: "general_inquiry",
     },
   },
@@ -168,10 +169,3 @@ const conversation4: Conversation = {
     created_at: "2025-10-30T09:15:00Z",
   }
 };
-
-const conversations: Conversation[] = [
-  conversation1,
-  conversation2,
-  conversation3,
-  conversation4
-];

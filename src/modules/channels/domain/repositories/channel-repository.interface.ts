@@ -29,5 +29,4 @@ export interface ChannelRepositoryInterface {
   exists(id: string): Promise<boolean>;
   findActiveByType(type: ChannelType, company_id: number): Promise<ChannelEntity[]>;
   findActiveChannels(): Promise<ChannelEntity[]>;
-  validateCompanyExists(company_id: number): Promise<boolean>;
 }

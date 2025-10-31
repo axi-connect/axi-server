@@ -156,18 +156,6 @@ export class ChannelRepository implements ChannelRepositoryInterface {
     return channels.map(channel => this.mapToEntity(channel));
   }
 
-  async validateCompanyExists(company_id: number): Promise<boolean> {
-    try {
-      const company = await this.prisma.company.findUnique({
-        where: { id: company_id },
-        select: { id: true }
-      });
-      return company !== null;
-    } catch {
-      return false;
-    }
-  }
-
   async findActiveChannels(): Promise<ChannelEntity[]> {
     const channels = await this.prisma.channel.findMany({
       where: {

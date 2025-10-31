@@ -38,7 +38,8 @@ export class ChannelAuthUseCases {
         private runtimeService: ChannelRuntimeService,
         private authSessionService: AuthSessionService,
         private channelRepository: ChannelRepositoryInterface,
-        private credentialRepository: CredentialRepositoryInterface
+        private credentialRepository: CredentialRepositoryInterface,
+        private companiesRepo?: { existsById(company_id: number): Promise<boolean> }
     ) {}
 
     /**
@@ -197,7 +198,7 @@ export class ChannelAuthUseCases {
         }
 
         // Validar que la empresa existe
-        const companyExists = await this.channelRepository.validateCompanyExists(input.company_id);
+        const companyExists = this.companiesRepo ? await this.companiesRepo.existsById(input.company_id) : true;
         if (!companyExists) throw new HttpError(400, `La empresa con ID ${input.company_id} no existe`);
 
         // Verificar que la cuenta del proveedor no esté duplicada

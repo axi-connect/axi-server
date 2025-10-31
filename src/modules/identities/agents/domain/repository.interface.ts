@@ -1,4 +1,4 @@
-import { Agent, AgentIntention, AIRequirement, Intention, Company, AgentStatus, ChannelType } from "@prisma/client";
+import { Agent, AgentIntention, AIRequirement, Intention, Company, AgentStatus, ChannelType, AgentCharacter } from "@prisma/client";
 
 export interface AgentIntentionDependency extends AgentIntention{
     intention: Intention
@@ -64,6 +64,7 @@ export interface UpdateAgentInput{
 
 export interface AgentsRepositoryInterface{
     deleteAgent(agent_id:number):Promise<Agent>
+    existsById(agent_id:number):Promise<boolean>
     createAgent(agent_data:CreateAgentInput):Promise<Agent>
     getAgent(value?:any, column?:string):Promise<AgentDetailDTO[]>
     updateAgent(agent_id:number, agent_data:UpdateAgentInput):Promise<Agent>
@@ -88,8 +89,8 @@ export interface AgentSummaryDTO{
     name:string;
     phone:string;
     alive:boolean;
+    character: AgentCharacter;
     company:{ id:number, name:string };
-    character?: { id:number, url:string | null, style:any } | null;
 }
 
 export interface AgentDetailDTO extends AgentSummaryDTO{

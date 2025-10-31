@@ -1,0 +1,317 @@
+openapi: 3.0.3
+info:
+  title: Conversations API
+  version: 1.0.0
+  description: Endpoints del módulo de conversaciones (listado con filtros y paginación)
+servers:
+  - url: /channels
+paths:
+  /conversations:
+    get:
+      summary: Listar conversaciones
+      description: >-
+        Retorna una lista de conversaciones con metadatos del participante y el último mensaje.
+        Protegido por `authenticate` y `authorize('/conversations','read')`.
+      tags: [Conversations]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string }
+          description: Estado de la conversación (p. ej. open, closed)
+        - in: query
+          name: channel_id
+          schema: { type: string, format: uuid }
+          description: ID del canal
+        - in: query
+          name: assigned_agent_id
+          schema: { type: integer, minimum: 1 }
+          description: ID del agente asignado
+        - in: query
+          name: participant_id
+          schema: { type: string }
+          description: Identificador del participante en el canal (teléfono, userId, etc.)
+        - in: query
+          name: participant_type
+          schema:
+            type: string
+            enum: [agent, lead, client, prospect, customer, system]
+          description: Tipo de participante
+        - in: query
+          name: date_from
+          schema: { type: string, format: date-time }
+          description: Filtrar por fecha de creación (>=)
+        - in: query
+          name: date_to
+          schema: { type: string, format: date-time }
+          description: Filtrar por fecha de creación (<=)
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+          description: Límite de resultados (máx 100)
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0 }
+          description: Desplazamiento para paginación
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+            enum: [created_at, updated_at, last_message_at]
+          description: Campo de ordenamiento
+        - in: query
+          name: sortDir
+          schema:
+            type: string
+            enum: [asc, desc]
+          description: Dirección de ordenamiento
+      responses:
+        '200':
+          description: Listado de conversaciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseConversationList'
+              examples:
+                success:
+                  value:
+                    successful: true
+                    message: Conversations retrieved successfully
+                    statusCode: 200
+                    data:
+                      - id: "conv_a1b2c3d4"
+                        status: open
+                        company_id: 101
+                        channel_id: "chan_whatsapp_456"
+                        external_id: "wa_ext_7890"
+                        updated_at: "2025-10-30T10:00:00Z"
+                        created_at: "2025-10-29T15:30:00Z"
+                        participant:
+                          id: "+573001234567"
+                          name: "Juan Pérez"
+                          avatar: "https://.../avatar.png"
+                          type: customer
+                          meta:
+                            phone: "+573001234567"
+                        last_message:
+                          id: "msg_f5g4h3i2"
+                          message: "¿Cómo puedo ayudarte con tu pedido?"
+                          created_at: "2025-10-30T10:00:00Z"
+                        assigned_agent:
+                          id: "42"
+                          name: ""
+                          avatar: ""
+        '400':
+          description: Parámetros inválidos
+        '401':
+          description: No autenticado
+        '403':
+          description: No autorizado
+        '500':
+          description: Error interno
+    post:
+      summary: Crear conversación
+      description: >-
+        Crea una conversación para un canal y `external_id` dados. Retorna 409 si ya existe
+        una conversación con el mismo `external_id` para el `channel_id`.
+        Protegido por `authenticate` y `authorize('/conversations','create')`.
+      tags: [Conversations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+            examples:
+              create:
+                value:
+                  company_id: 101
+                  assigned_agent_id: 42
+                  external_id: "wa_ext_7890"
+                  participant_type: customer
+                  participant_id: "+573001234567"
+                  channel_id: "11111111-2222-3333-4444-555555555555"
+                  participant_meta:
+                    name: "Juan Pérez"
+                    phone: "+573001234567"
+                    avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761856211/0d6e5e4c-d792-4447-b0ca-f42c2a9aca73.png"
+      responses:
+        '201':
+          description: Conversación creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseConversationCreated'
+        '400':
+          description: Datos inválidos
+        '401':
+          description: No autenticado
+        '403':
+          description: No autorizado
+        '404':
+          description: Company no encontrada
+        '409':
+          description: Ya existe una conversación con el external_id para el canal
+        '500':
+          description: Error interno
+
+components:
+  schemas:
+    CreateConversationRequest:
+      type: object
+      required: [company_id, channel_id, external_id, participant_type]
+      properties:
+        company_id:
+          type: integer
+          minimum: 1
+        channel_id:
+          type: string
+          format: uuid
+        external_id:
+          type: string
+          minLength: 1
+        participant_id:
+          type: string
+        participant_meta:
+          type: object
+          additionalProperties: true
+        participant_type:
+          type: string
+          enum: [agent, lead, client, prospect, customer, system]
+        assigned_agent_id:
+          type: integer
+          minimum: 1
+
+    ResponseConversationList:
+      type: object
+      properties:
+        successful:
+          type: boolean
+        message:
+          type: string
+        statusCode:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationItem'
+
+    ConversationItem:
+    ResponseConversationCreated:
+      type: object
+      properties:
+        successful:
+          type: boolean
+        message:
+          type: string
+          example: Conversation created successfully
+        statusCode:
+          type: integer
+          example: 201
+        data:
+          $ref: '#/components/schemas/ConversationEntity'
+
+    ConversationEntity:
+      type: object
+      required: [id, status, company_id, channel_id, external_id, created_at, updated_at, participant_type]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        company_id:
+          type: integer
+        channel_id:
+          type: string
+          format: uuid
+        external_id:
+          type: string
+        assigned_agent_id:
+          type: integer
+          nullable: true
+        participant_id:
+          type: string
+          nullable: true
+        participant_meta:
+          type: object
+          additionalProperties: true
+          nullable: true
+        participant_type:
+          type: string
+          enum: [agent, lead, client, prospect, customer, system]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_message_at:
+          type: string
+          format: date-time
+          nullable: true
+      type: object
+      required: [id, status, company_id, channel_id, external_id, updated_at, created_at, participant, last_message]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        company_id:
+          type: integer
+        channel_id:
+          type: string
+          format: uuid
+        external_id:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        participant:
+          $ref: '#/components/schemas/Participant'
+        last_message:
+          $ref: '#/components/schemas/MessageSummary'
+
+    Participant:
+      type: object
+      required: [id, type]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        avatar:
+          type: string
+          format: uri
+        type:
+          type: string
+          enum: [agent, lead, client, prospect, customer, system]
+        meta:
+          type: object
+          additionalProperties: true
+
+    MessageSummary:
+      type: object
+      required: [id, message, created_at]
+      properties:
+        id:
+          type: string
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    AssignedAgent:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        avatar:
+          type: string
+          format: uri

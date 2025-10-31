@@ -3,19 +3,19 @@ import { ConversationEntity, CreateConversationData, UpdateConversationData } fr
 
 export interface ConversationSearchCriteria {
   id?: string;
-  status?: string;
-  company_id?: number;
-  channel_id?: string;
-  external_id?: string;
-  assigned_agent_id?: number;
-  participant_id?: string;
-  participant_type?: ParticipantType;
-  date_from?: Date;
   date_to?: Date;
   limit?: number;
   offset?: number;
-  sortBy?: 'created_at' | 'updated_at' | 'last_message_at';
+  status?: string;
+  date_from?: Date;
+  company_id?: number;
+  channel_id?: string;
+  external_id?: string;
+  participant_id?: string;
   sortDir?: 'asc' | 'desc';
+  assigned_agent_id?: number;
+  participant_type?: ParticipantType;
+  sortBy?: 'created_at' | 'updated_at' | 'last_message_at';
 }
 
 export interface ConversationRepositoryInterface {
