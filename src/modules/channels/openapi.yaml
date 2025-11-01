@@ -519,7 +519,7 @@ components:
       enum: [PENDING, SENT, DELIVERED, READ, FAILED, RECEIVED]
       description: Delivery status of the message
 
-    ParticipantType:
+    ContactType:
       type: string
       enum: [agent, lead, client, prospect, customer, system]
       description: Type of conversation participant
@@ -614,7 +614,7 @@ components:
           type: object
           description: Additional participant metadata
         participant_type:
-          $ref: '#/components/schemas/ParticipantType'
+          $ref: '#/components/schemas/ContactType'
 
     UpdateConversationRequest:
       type: object
@@ -737,7 +737,7 @@ components:
           type: object
           nullable: true
         participant_type:
-          $ref: '#/components/schemas/ParticipantType'
+          $ref: '#/components/schemas/ContactType'
         created_at:
           type: string
           format: date-time

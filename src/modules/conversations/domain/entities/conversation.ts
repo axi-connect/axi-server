@@ -1,51 +1,25 @@
-import { ParticipantType } from '@prisma/client';
+import { ContactType } from '@prisma/client';
 import { InputJsonValue } from '@prisma/client/runtime/library';
 
-export interface ConversationEntity {
+export interface Contact {
   id: string;
-  status: string;
-  created_at: Date;
-  updated_at: Date;
+  name: string;
+  number: string;
   company_id: number;
-  channel_id: string;
-  external_id: string;
-  participant_meta?: any;
-  last_message_at?: Date;
-  participant_id?: string;
-  assigned_agent_id?: number;
-  participant_type: ParticipantType;
+  type: ContactType;
+  profile_pic_url: string;
+  meta: Record<string, unknown> | null;
 }
 
-export interface CreateConversationData {
-  company_id: number;
-  channel_id: string;
-  external_id: string;
-  participant_id?: string;
-  assigned_agent_id?: number;
-  participant_type: ParticipantType;
-  participant_meta?: InputJsonValue | undefined;
-}
-
-export interface UpdateConversationData {
-  status?: string;
-  assigned_agent_id?: number;
-  participant_meta?: any;
-  last_message_at?: Date;
-}
-
-export type Conversation = {
+export interface ConversationDto {
   id: string
   status: string
+  contact: Contact
   company_id: number
   channel_id: string
-  external_id: string
   updated_at: string
   created_at: string
-  participant: {
-    id: string
-    type: ParticipantType
-    meta: Record<string, unknown> | null
-  }
+  external_id: string
   last_message?: {
     id: string
     message: string
@@ -58,114 +32,34 @@ export type Conversation = {
   }
 }
 
-const conversation1: Conversation = {
-  id: "conv_a1b2c3d4",
-  status: "open", // Podría ser 'open', 'closed', 'pending', etc.
-  company_id: 101,
-  channel_id: "chan_whatsapp_456",
-  external_id: "wa_ext_7890",
-  updated_at: "2025-10-30T10:00:00Z",
-  created_at: "2025-10-29T15:30:00Z",
-  participant: {
-    id: "part_x9y8z7w6",
-    type: "lead",
-    meta: {
-      name: "Juan Pérez",
-      avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761806910/1e245de8-23d5-498f-8d60-f9fc77557d40.png",
-      phone: "+573001234567",
-      city: "Bogotá",
-    },
-  },
-  last_message: {
-    id: "msg_f5g4h3i2",
-    message: "¿Cómo puedo ayudarte con tu pedido?",
-    created_at: "2025-10-30T10:00:00Z",
-  },
-  assigned_agent: {
-    id: "ag_j1k2l3m4",
-    name: "Ana Gómez",
-    // agente lumo
-    avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761809718/01-character-lumo-_close-up_em4lkg.png",
-  },
-};
+export interface ConversationEntity {
+  id: string;
+  status: string;
+  created_at: Date;
+  updated_at: Date;
+  company_id: number;
+  channel_id: string;
+  external_id: string;
+  contact_meta?: any;
+  last_message_at?: Date;
+  contact_id?: string;
+  assigned_agent_id?: number;
+  contact_type: ContactType;
+}
 
-const conversation2: Conversation = {
-  id: "conv_e5f6g7h8",
-  status: "closed",
-  company_id: 102,
-  channel_id: "chan_webchat_111",
-  external_id: "web_ext_2222",
-  updated_at: "2025-10-28T14:45:00Z",
-  created_at: "2025-10-28T14:00:00Z",
-  participant: {
-      meta: {
-        name: "María López",
-        avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761852896/c0836563-8c9c-4982-880d-9fab6fc279f4.png",
-      },
-      type: "lead",
-      id: "part_n0p1q2r3",
-  },
-  last_message: {
-      id: "msg_s9t8u7v6",
-      created_at: "2025-10-28T14:45:00Z",
-      message: "Gracias por la ayuda, problema resuelto.",
-  },
-  assigned_agent: {
-    id: "ag_w4x3y2z1",
-    name: "Carlos Ruiz",
-    avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761854482/04-character-nova-_close-up_pcu8mc.png",
-  },
-};
+export interface CreateConversationData {
+  company_id: number;
+  channel_id: string;
+  external_id: string;
+  contact_id?: string;
+  assigned_agent_id?: number;
+  contact_type: ContactType;
+  contact_meta?: InputJsonValue | undefined;
+}
 
-const conversation3: Conversation = {
-  id: "conv_m3n4o5p6",
-  status: "open",
-  company_id: 103,
-  channel_id: "chan_whatsapp_456",
-  external_id: "wa_ext_5555",
-  updated_at: "2025-10-30T10:05:00Z",
-  created_at: "2025-10-30T09:50:00Z",
-  participant: {
-    id: "part_q9r0s1t2",
-    type: "customer",
-    meta: {
-      name: "Andrés Giraldo",
-      account_tier: "premium",
-      avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761856211/0d6e5e4c-d792-4447-b0ca-f42c2a9aca73.png",
-    },
-  },
-  last_message: {
-    id: "msg_u3v4w5x6",
-    message: "Necesito cambiar mi dirección de envío.",
-    created_at: "2025-10-30T10:05:00Z",
-  },
-  assigned_agent: {
-    id: "ag_w4x3y2z1",
-    name: "Carlos Ruiz",
-    avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761855914/05-character-vex-_close-up_gy0xod.png"
-  },
-};
-
-const conversation4: Conversation = {
-  id: "conv_i9j0k1l2",
-  status: "pending",
-  company_id: 101,
-  channel_id: "chan_messenger_333",
-  external_id: "fb_ext_4444",
-  updated_at: "2025-10-30T09:15:00Z",
-  created_at: "2025-10-30T09:10:00Z",
-  participant: {
-    type: "system",
-    id: "part_a5b6c7d8",
-    meta: {
-      name: "Bot Automático",
-      avatar: "https://res.cloudinary.com/dpfnxj52w/image/upload/v1761854482/04-character-nova-_close-up_pcu8mc.png",
-      intent: "general_inquiry",
-    },
-  },
-  last_message: {
-    id: "msg_e9f0g1h2",
-    message: "Su consulta ha sido escalada a un agente.",
-    created_at: "2025-10-30T09:15:00Z",
-  }
-};
+export interface UpdateConversationData {
+  status?: string;
+  assigned_agent_id?: number;
+  contact_meta?: any;
+  last_message_at?: Date;
+}

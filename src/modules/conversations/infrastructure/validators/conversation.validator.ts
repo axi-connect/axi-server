@@ -1,5 +1,5 @@
 import Joi from "joi";
-import { ParticipantType } from '@prisma/client';
+import { ContactType } from '@prisma/client';
 import { NextFunction, Request, Response } from "express";
 import { ResponseDto } from "@/shared/dto/response.dto.js";
 
@@ -20,19 +20,19 @@ const baseMessages = {
 const createSchema = Joi.object({
   channel_id: Joi.string().uuid().required().label('canal'),
   external_id: Joi.string().min(1).required().label('id externo'),
-  participant_id: Joi.string().optional().label('id participante'),
+  contact_id: Joi.string().optional().label('id contacto'),
   company_id: Joi.number().integer().min(1).required().label('empresa'),
   assigned_agent_id: Joi.number().integer().min(1).optional().label('agente asignado'),
-  participant_meta: Joi.object().unknown(true).optional().label('metadata participante'),
-  participant_type: Joi.string().valid(...Object.values(ParticipantType)).required().label('tipo de participante'),
+  contact_meta: Joi.object().unknown(true).optional().label('metadata contacto'),
+  contact_type: Joi.string().valid(...Object.values(ContactType)).required().label('tipo de contacto'),
 }).messages(baseMessages);
 
 const searchSchema = Joi.object({
   status: Joi.string().trim().optional().label('estado'),
   channel_id: Joi.string().uuid().optional().label('canal'),
   assigned_agent_id: Joi.number().integer().min(1).optional().label('agente asignado'),
-  participant_id: Joi.string().optional().label('id participante'),
-  participant_type: Joi.string().valid(...Object.values(ParticipantType)).optional().label('tipo de participante'),
+  contact_id: Joi.string().optional().label('id contacto'),
+  contact_type: Joi.string().valid(...Object.values(ContactType)).optional().label('tipo de contacto'),
   date_from: Joi.date().iso().optional().label('fecha desde'),
   date_to: Joi.date().iso().optional().label('fecha hasta'),
   limit: Joi.number().integer().min(1).max(100).default(20).label('límite'),

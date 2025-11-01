@@ -29,7 +29,7 @@ CREATE TYPE "channels"."MessageStatus" AS ENUM ('PENDING', 'SENT', 'DELIVERED', 
 CREATE TYPE "channels"."ChannelType" AS ENUM ('CALL', 'EMAIL', 'WHATSAPP', 'TELEGRAM', 'INSTAGRAM', 'MESSENGER');
 
 -- CreateEnum
-CREATE TYPE "channels"."ParticipantType" AS ENUM ('agent', 'lead', 'client', 'prospect', 'customer', 'system');
+CREATE TYPE "channels"."ContactType" AS ENUM ('agent', 'lead', 'client', 'prospect', 'customer', 'system');
 
 -- CreateEnum
 CREATE TYPE "channels"."MessageDirection" AS ENUM ('incoming', 'outgoing');
@@ -188,7 +188,7 @@ CREATE TABLE "channels"."conversation" (
     "assigned_agent_id" INTEGER,
     "participant_id" TEXT,
     "participant_meta" JSONB,
-    "participant_type" "channels"."ParticipantType" NOT NULL,
+    "participant_type" "channels"."ContactType" NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "last_message_at" TIMESTAMP(3),

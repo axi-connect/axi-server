@@ -23,7 +23,7 @@ La integración HTTP cuelga bajo `/channels` (véase Channels Router). La integr
   - Campos: `id`, `from?`, `to?`, `message`, `payload?`, `metadata?`, `direction`, `timestamp`, `conversation_id`, `status`, `content_type`, `created_at`, `updated_at`
 - `MessageAttachmentEntity` (definición domain; implementación infra pendiente)
 
-Enums referenciados de Prisma (`channels` schema): `ParticipantType`, `MessageDirection`, `MessageStatus`.
+Enums referenciados de Prisma (`channels` schema): `ContactType`, `MessageDirection`, `MessageStatus`.
 
 ### Casos de uso (Application)
 - `ConversationUseCases`
@@ -128,7 +128,7 @@ POST /channels/messages
 
 ### Esquema Prisma relevante (schemas/channels.prisma)
 - `Conversation` (UUID), `MessageLog`, `MessageAttachment`
-- Enums: `ChannelType`, `ChannelProvider`, `MessageStatus`, `MessageDirection`, `ParticipantType`
+- Enums: `ChannelType`, `ChannelProvider`, `MessageStatus`, `MessageDirection`, `ContactType`
 
 ### Guía de extensión
 - Añadir endpoints de búsqueda/paginación para conversaciones y mensajes usando los criterios ya soportados por los repositorios.

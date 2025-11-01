@@ -30,10 +30,10 @@ export class ConversationRepository implements ConversationRepositoryInterface {
     return conversation ? this.mapToEntity(conversation) : null;
   }
 
-  async findByParticipant(participant_id: string, channel_id: string): Promise<ConversationEntity[]> {
+  async findByContact(contact_id: string, channel_id: string): Promise<ConversationEntity[]> {
     const conversations = await this.prisma.conversation.findMany({
       where: {
-        participant_id,
+        contact_id,
         channel_id
       },
       orderBy: { updated_at: 'desc' }
@@ -106,7 +106,7 @@ export class ConversationRepository implements ConversationRepositoryInterface {
       data: {
         status: data.status,
         assigned_agent_id: data.assigned_agent_id,
-        participant_meta: data.participant_meta,
+        contact_meta: data.contact_meta,
         last_message_at: data.last_message_at,
         updated_at: new Date()
       }
@@ -192,14 +192,14 @@ export class ConversationRepository implements ConversationRepositoryInterface {
       status: conversation.status,
       company_id: conversation.company_id,
       channel_id: conversation.channel_id,
-      external_id: conversation.external_id,
-      assigned_agent_id: conversation.assigned_agent_id,
-      participant_id: conversation.participant_id,
-      participant_meta: conversation.participant_meta,
-      participant_type: conversation.participant_type,
+      contact_id: conversation.contact_id,
       created_at: conversation.created_at,
       updated_at: conversation.updated_at,
-      last_message_at: conversation.last_message_at
+      external_id: conversation.external_id,
+      contact_type: conversation.contact_type,
+      contact_meta: conversation.contact_meta,
+      last_message_at: conversation.last_message_at,
+      assigned_agent_id: conversation.assigned_agent_id,
     };
   }
 }

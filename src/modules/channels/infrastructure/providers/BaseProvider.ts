@@ -1,5 +1,6 @@
 import { ChannelProvider } from '@prisma/client';
 import { WebSocketEvent } from '../../domain/entities/channel.js';
+import { Contact } from '@/modules/conversations/domain/entities/conversation.js';
 
 export interface ProviderConfig {
   apiKey?: string;
@@ -47,10 +48,15 @@ export interface WebhookMessage {
   metadata?: any;
 }
 
+type MessageHandlerData = {
+  message: any;
+  contact: Contact;
+};
+
 export abstract class BaseProvider {
   protected config: ProviderConfig;
   protected provider: ChannelProvider;
-  protected messageHandler?: (data: any) => Promise<void>;
+  protected messageHandler?: (data: MessageHandlerData) => Promise<void>;
 
   constructor(config: ProviderConfig, provider: ChannelProvider) {
     this.config = config;
@@ -69,7 +75,7 @@ export abstract class BaseProvider {
 
   abstract destroy(): Promise<void>;
 
-  setMessageHandler(handler: (data: any) => Promise<void>): void {
+  setMessageHandler(handler: (data: MessageHandlerData) => Promise<void>): void {
     this.messageHandler = handler;
   }
 

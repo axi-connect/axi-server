@@ -41,7 +41,7 @@ enum ChannelType {
   @@schema("channels")
 }
 
-enum ParticipantType {
+enum ContactType {
   agent
   lead
   client
@@ -119,9 +119,9 @@ model Conversation {
   channel_id        String // FK to Channel
   external_id       String          @unique // external conversation id from provider (wa session id, etc.)
   assigned_agent_id Int? // current assigned agent
-  participant_id    String? // phone or user id on the channel (e.g. customer phone number)
-  participant_meta  Json? // any metadata (profile name, locale)
-  participant_type  ParticipantType // agent | lead | client | prospect | customer | system
+  contact_id        String? // phone or user id on the channel (e.g. customer phone number)
+  contact_meta      Json? // any metadata (profile name, locale)
+  contact_type      ContactType // agent | lead | client | prospect | customer | system
   created_at        DateTime        @default(now()) // date of creation
   updated_at        DateTime        @updatedAt // date of last update
   last_message_at   DateTime? // date of last message
@@ -135,7 +135,7 @@ model Conversation {
   @@index([channel_id, external_id])
   @@index([company_id], map: "idx_conversation_company")
   @@index([channel_id], map: "idx_conversation_channel")
-  @@index([participant_id], map: "idx_conversation_participant")
+  @@index([contact_id], map: "idx_conversation_contact")
   @@map("conversation")
   @@schema("channels")
 }

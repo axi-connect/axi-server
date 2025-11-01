@@ -11,6 +11,13 @@ import { AuthSessionService } from '../application/services/auth-session.service
 import { ChannelRuntimeService } from '../application/services/channel-runtime.service.js';
 import { ChannelWebSocketGateway } from '../application/services/channel-websocket.gateway.js';
 import { CompaniesRepository } from '@/modules/identities/companies/infrastructure/companies.repository.js';
+import { ConversationRepository } from '@/modules/conversations/infrastructure/repositories/conversation.repository.js';
+import { ConversationResolver } from '@/modules/conversations/application/services/conversation-resolver.service.js';
+import { MessageRepository } from '@/modules/conversations/infrastructure/repositories/message.repository.js';
+import { MessageUseCases } from '@/modules/conversations/application/use-cases/message.usecases.js';
+import { ConversationUseCases } from '@/modules/conversations/application/use-cases/conversation.usecases.js';
+import { AgentsRepository } from '@/modules/identities/agents/infrastructure/agents.repository.js';
+import { MessageIngestionService } from '@/modules/conversations/application/services/message-ingestion.service.js';
 
 // Use Cases
 import { ChannelUseCases } from '../application/use-cases/channel.usecases.js';
@@ -69,6 +76,35 @@ export class ChannelsContainer {
             this.channelAuthUseCases,
             this.channelRepository,
         );
+
+        // Wire ConversationResolver for inbound messages
+        const conversationRepository = new ConversationRepository(this.prisma);
+        const conversationResolver = new ConversationResolver(
+            conversationRepository,
+            this.channelRepository,
+            60 * 60 * 24
+        );
+        this.runtimeService.setConversationResolver(conversationResolver);
+
+        // // Wire MessageIngestion pipeline (MessageUseCases + ConversationUseCases)
+        // const messageRepository = new MessageRepository(this.prisma);
+        // const messageUseCases = new MessageUseCases(messageRepository);
+
+        // const companiesRepository2 = companiesRepository; // reuse
+        // const agentsRepository = new AgentsRepository();
+        // const conversationUseCases = new ConversationUseCases(
+        //     conversationRepository,
+        //     messageRepository,
+        //     companiesRepository2,
+        //     agentsRepository,
+        // );
+
+        // const messageIngestion = new MessageIngestionService(
+        //     messageUseCases,
+        //     conversationUseCases,
+        //     { idempotencyTtlSeconds: 15 * 60, maxMetadataBytes: 32 * 1024 }
+        // );
+        // this.runtimeService.setMessageIngestion(messageIngestion);
     }
 
     /**

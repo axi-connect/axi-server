@@ -1,5 +1,5 @@
 import pkg from 'whatsapp-web.js';
-import { ChannelProvider } from '@prisma/client';
+import { ChannelProvider, ContactType } from '@prisma/client';
 import { AuthSessionService } from '../../application/services/auth-session.service.js';
 import { BaseProvider, ProviderConfig, MessagePayload, ProviderResponse, WebhookMessage } from './BaseProvider.js';
 
@@ -16,12 +16,32 @@ export class WhatsappProvider extends BaseProvider {
     private readonly authSessionService: AuthSessionService
   ) {
     super(config, ChannelProvider.CUSTOM);
+    this.ensureClient();
   }
 
   /**
-   * Inicializa el cliente de WhatsApp si no está listo
+   * Inicializa el cliente de WhatsApp
+   * @returns true si el cliente se inicializó correctamente, false en caso de error
+  */
+  async initialize(): Promise<boolean> {
+    try {
+      if (!this.client) return false;
+      await this.client.initialize();
+      return true;
+    } catch (error: any) {
+      console.error(`❌ Error inicializando cliente para canal ${this.channelId}:`, error);
+      if (error.message && error.message.includes('EBUSY')) {
+        console.log(`🔧 Error EBUSY detectado, limpiando sesión para canal ${this.channelId}`);
+        this.handleSessionCleanup();
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Instancia el cliente de WhatsApp si no está listo
    * Garantiza que solo se inicialice una vez por instancia
-   */
+  */
   private async ensureClient(): Promise<void> {
     // Si el cliente ya está listo, no hacer nada
     if (this.client?.info?.wid?.user) return;
@@ -37,7 +57,6 @@ export class WhatsappProvider extends BaseProvider {
           args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
         },
       });
-
       this.setupEventHandlers();
     }
   }
@@ -103,31 +122,28 @@ export class WhatsappProvider extends BaseProvider {
 
         const contact = await message.getContact();
         const contactId = contact.id._serialized;
-        const contactInfo = {
-          id: contactId,
-          name: contact.name || contact.pushname || 'Unknown',
-          number: contact.number,
-          company_id: this.config.company_id
-        };
+        const profilePicUrl = await contact.getProfilePicUrl();
 
         // Handle message processing with debouncing
         const timerKey = contactId;
-        if (this.messageTimers.has(timerKey)) {
-          clearTimeout(this.messageTimers.get(timerKey)!);
-        }
+        if (this.messageTimers.has(timerKey)) clearTimeout(this.messageTimers.get(timerKey)!);
 
         const timer = setTimeout(async () => {
-        this.messageTimers.delete(timerKey);
-
-        // Process the message through the configured message handler
-        if (this.config.onMessage) {
-          await this.config.onMessage({
-          contact: contactInfo,
-          message: message.body,
-          current_message: message,
-          channelId: this.channelId
+          this.messageTimers.delete(timerKey);
+          // Process the message through the configured message handler
+          if (!this.messageHandler) return;
+          await this.messageHandler({
+            contact: {
+              meta: {},
+              id: contactId,
+              number: contact.number,
+              type: ContactType.prospect,
+              profile_pic_url: profilePicUrl,
+              company_id: this.config.company_id,
+              name: contact.name || contact.pushname || contact.verifiedName || 'Unknown',
+            },
+            message: message.body,
           });
-        }
         }, 1000); // 1 second debounce
 
         this.messageTimers.set(timerKey, timer);
@@ -170,8 +186,8 @@ export class WhatsappProvider extends BaseProvider {
       if (!this.client.info?.wid?.user) {
         // Intentar reconectar si es posible
         try {
-          await this.client.initialize();
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar inicialización
+          await this.ensureClient();
+          // await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar inicialización
 
           if (!this.client.info?.wid?.user) {
             return {
@@ -307,26 +323,7 @@ export class WhatsappProvider extends BaseProvider {
         });
 
         // Inicializar con manejo de errores EBUSY
-        this.client!.initialize().catch(async (error: any) => {
-          console.error(`❌ Error inicializando cliente para canal ${this.channelId}:`, error);
-
-          // Si es error EBUSY, intentar limpiar la sesión
-          if (error.message && error.message.includes('EBUSY')) {
-            console.log(`🔧 Error EBUSY detectado, limpiando sesión para canal ${this.channelId}`);
-            try {
-              await this.handleSessionCleanup();
-              cleanup();
-              reject(new Error('Session corrupted, please try again'));
-            } catch (cleanupError) {
-              console.error('Error during session cleanup:', cleanupError);
-              cleanup();
-              reject(error); // Rechazar con el error original
-            }
-          } else {
-            cleanup();
-            reject(error);
-          }
-        });
+        this.initialize();
       });
     } catch (error: any) {
       console.error(`Error en generateQR para canal ${this.channelId}:`, error);

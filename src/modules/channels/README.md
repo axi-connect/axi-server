@@ -430,7 +430,7 @@ interface ConversationEntity {
   assigned_agent_id?: number;   // Agente asignado
   participant_id?: string;      // ID del participante
   participant_meta?: any;       // Metadata del participante
-  participant_type: ParticipantType; // agent, lead, client, etc.
+  participant_type: ContactType; // agent, lead, client, etc.
   created_at: Date;
   updated_at: Date;
   last_message_at?: Date;       // Último mensaje

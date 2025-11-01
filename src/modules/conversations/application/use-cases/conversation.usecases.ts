@@ -1,9 +1,9 @@
-import { ParticipantType } from '@prisma/client';
+import { ContactType } from '@prisma/client';
 import { HttpError } from '@/shared/errors/http.error.js';
 import type { MessageEntity } from '@/modules/conversations/domain/entities/message.js';
+import type { Contact, ConversationDto } from '@/modules/conversations/domain/entities/conversation.js';
 import { AgentsRepository } from '@/modules/identities/agents/infrastructure/agents.repository.js';
 import type { CompaniesRepository } from '@/modules/identities/companies/infrastructure/companies.repository.js';
-import type { Conversation as ConversationDto } from '@/modules/conversations/domain/entities/conversation.js';
 import { MessageRepositoryInterface } from '@/modules/conversations/domain/repositories/message-repository.interface.js';
 import type { ConversationEntity, CreateConversationData, UpdateConversationData } from '@/modules/conversations/domain/entities/conversation.js';
 import type { ConversationRepositoryInterface, ConversationSearchCriteria } from '@/modules/conversations/domain/repositories/conversation-repository.interface.js';
@@ -11,15 +11,15 @@ import type { ConversationRepositoryInterface, ConversationSearchCriteria } from
 export interface UpdateConversationInput {
   status?: string;
   assigned_agent_id?: number;
-  participant_meta?: any;
+  contact_meta?: any;
 }
 
 export interface ConversationSearchInput {
   status?: string;
   channel_id?: string;
   assigned_agent_id?: number;
-  participant_id?: string;
-  participant_type?: ParticipantType;
+  contact_id?: string;
+  contact_type?: ContactType;
   date_from?: Date;
   date_to?: Date;
   limit?: number;
@@ -44,14 +44,14 @@ export class ConversationUseCases {
     const existing = await this.conversationRepository.findByExternalId(input.external_id, input.channel_id);
     if (existing) throw new HttpError(409, `Conversation with external_id '${input.external_id}' already exists for this channel`);
 
-    const { company_id, channel_id, external_id, participant_id, participant_meta, participant_type, assigned_agent_id} = input;
+    const { company_id, channel_id, external_id, contact_id, contact_meta, contact_type, assigned_agent_id} = input;
 
     if (assigned_agent_id) {
       const exists = await this.agentsRepository.existsById(assigned_agent_id);
       if (!exists) throw new HttpError(404, `Agent '${assigned_agent_id}' not found`);
     }
 
-    return this.conversationRepository.create({ company_id, channel_id, external_id, participant_id, participant_meta, participant_type, assigned_agent_id});
+    return this.conversationRepository.create({ company_id, channel_id, external_id, contact_id, contact_meta, contact_type, assigned_agent_id});
   }
 
   async getConversationById(id: string): Promise<ConversationEntity> {
@@ -70,7 +70,7 @@ export class ConversationUseCases {
     const updateData: UpdateConversationData = {
       status: input.status,
       assigned_agent_id: input.assigned_agent_id,
-      participant_meta: input.participant_meta
+      contact_meta: input.contact_meta
     };
 
     return this.conversationRepository.update(id, updateData);
@@ -105,7 +105,7 @@ export class ConversationUseCases {
     for (const conv of conversations) {
       let assigned_agent: { id: string; name: string; avatar: string } | undefined;
       const latestMessage: MessageEntity | null = await this.messageRepository.findLatestByConversation(conv.id);
-      const participantMeta = (conv.participant_meta as unknown) as Record<string, unknown> | null;
+      const contactMeta = conv.contact_meta as unknown as Contact;
 
       if (conv.assigned_agent_id) {
         const [agent] = await this.agentsRepository.getAgent(conv.assigned_agent_id);
@@ -118,6 +118,8 @@ export class ConversationUseCases {
         }
       }
 
+      const { name, number, profile_pic_url, meta, id: contact_id } = contactMeta;
+
       const dto: ConversationDto = {
         id: conv.id,
         assigned_agent,
@@ -127,10 +129,14 @@ export class ConversationUseCases {
         external_id: conv.external_id,
         updated_at: conv.updated_at.toISOString(),
         created_at: conv.created_at.toISOString(),
-        participant: {
-          type: conv.participant_type,
-          id: conv.participant_id ?? '',
-          meta: participantMeta ?? null
+        contact: {
+          meta,
+          name,
+          number,
+          id: contact_id,
+          profile_pic_url,
+          type: conv.contact_type,
+          company_id: conv.company_id,
         },
         last_message: latestMessage
           ? {

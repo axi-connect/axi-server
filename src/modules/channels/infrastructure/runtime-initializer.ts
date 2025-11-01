@@ -19,12 +19,12 @@ export async function initializeChannelRuntime(io: SocketIOServer): Promise<{
   const webSocketGateway = container.getWebSocketGateway();
 
   // Inicializar canales activos automáticamente
-  // try {
-  //   await container.initializeActiveChannels();
-  //   console.log('✅ Canales activos inicializados');
-  // } catch (error) {
-  //   console.error('⚠️ Error inicializando canales activos, continuando...', error);
-  // }
+  try {
+    await container.initializeActiveChannels();
+    console.log('✅ Canales activos inicializados');
+  } catch (error) {
+    console.error('⚠️ Error inicializando canales activos, continuando...', error);
+  }
 
   // Configurar limpieza al cerrar aplicación
   const cleanup = async () => {

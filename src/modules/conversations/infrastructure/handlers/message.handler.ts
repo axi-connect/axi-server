@@ -1,6 +1,6 @@
 import { Namespace } from 'socket.io';
-import { AuthenticatedSocket } from './auth.middleware.js';
-import { ChannelRuntimeService } from '../../application/services/channel-runtime.service.js';
+import { AuthenticatedSocket } from '@/modules/channels/infrastructure/handlers/auth.middleware.js';
+import { ChannelRuntimeService } from '@/modules/channels/application/services/channel-runtime.service.js';
 
 /**
  * Interfaces para el handler de mensajes
