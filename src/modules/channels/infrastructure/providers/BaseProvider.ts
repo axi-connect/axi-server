@@ -1,17 +1,18 @@
 import { ChannelProvider } from '@prisma/client';
 import { WebSocketEvent } from '../../domain/entities/channel.js';
 import { Contact } from '@/modules/conversations/domain/entities/conversation.js';
+import { IngestIncomingInput } from '@/modules/conversations/application/services/message-ingestion.service.js';
 
 export interface ProviderConfig {
   apiKey?: string;
   apiSecret?: string;
   authToken?: string;
+  [key: string]: any;
   accountSid?: string;
   webhookUrl?: string;
   accessToken?: string;
   phoneNumberId?: string;
   emitEventCallback: (event: WebSocketEvent) => void;
-  [key: string]: any;
 }
 
 export interface MessagePayload {
@@ -49,8 +50,8 @@ export interface WebhookMessage {
 }
 
 type MessageHandlerData = {
-  message: any;
   contact: Contact;
+  message: IngestIncomingInput;
 };
 
 export abstract class BaseProvider {

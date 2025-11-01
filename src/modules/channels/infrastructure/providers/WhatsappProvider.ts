@@ -1,4 +1,5 @@
 import pkg from 'whatsapp-web.js';
+import { type Message } from 'whatsapp-web.js';
 import { ChannelProvider, ContactType } from '@prisma/client';
 import { AuthSessionService } from '../../application/services/auth-session.service.js';
 import { BaseProvider, ProviderConfig, MessagePayload, ProviderResponse, WebhookMessage } from './BaseProvider.js';
@@ -115,7 +116,7 @@ export class WhatsappProvider extends BaseProvider {
     });
 
     // Manejar mensajes entrantes
-    this.client.on('message', async (message: any) => {
+    this.client.on('message', async (message: Message) => {
       try {
         // Filter out status messages and group messages
         if (message.isStatus || message.from.includes('@g.us')) return
@@ -142,7 +143,16 @@ export class WhatsappProvider extends BaseProvider {
               company_id: this.config.company_id,
               name: contact.name || contact.pushname || contact.verifiedName || 'Unknown',
             },
-            message: message.body,
+            message: {
+              metadata: {},
+              to: message.to,
+              from: message.from,
+              conversation_id: '',
+              message: message.body,
+              channel_id: this.channelId,
+              content_type: message.type,
+              provider_message_id: message.id.id,
+            },
           });
         }, 1000); // 1 second debounce
 

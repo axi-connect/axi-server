@@ -47,15 +47,6 @@ export interface ChannelStatus {
   isAuthenticated: boolean;
 }
 
-export interface RuntimeMessage {
-  id: string;
-  channelId: string;
-  direction: 'incoming' | 'outgoing';
-  content: any;
-  timestamp: Date;
-  metadata?: any;
-}
-
 export interface WebSocketEvent {
   event: string;
   channelId: string;

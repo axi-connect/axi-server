@@ -1,29 +1,23 @@
 import { getRedisClient } from '@/database/redis.js';
 import { MessageDirection, MessageStatus } from '@prisma/client';
 import type { MessageEntity } from '@/modules/conversations/domain/entities/message.js';
-import type { MessageUseCases } from '@/modules/conversations/application/use-cases/message.usecases.js';
-import type { ConversationUseCases } from '@/modules/conversations/application/use-cases/conversation.usecases.js';
+import type { CreateMessageData } from '@/modules/conversations/domain/entities/message.js';
+import type { MessageRepositoryInterface } from '@/modules/conversations/domain/repositories/message-repository.interface.js';
+import type { ConversationRepositoryInterface } from '@/modules/conversations/domain/repositories/conversation-repository.interface.js';
 
-export interface IngestIncomingInput {
-  channelId: string;
-  conversationId: string;
-  providerMessageId?: string;
-  body: string;
-  from?: string;
-  to?: string;
-  timestamp?: Date;
-  metadata?: unknown;
-  contentType?: string; // default 'text'
+export interface IngestIncomingInput extends Omit<CreateMessageData, 'direction' | 'status'> {
+  channel_id: string;
+  provider_message_id: string;
 }
 
 export class MessageIngestionService {
   private readonly redis = getRedisClient();
-  private readonly idempotencyTtlSeconds: number;
   private readonly maxMetadataBytes: number;
+  private readonly idempotencyTtlSeconds: number;
 
   constructor(
-    private readonly messageUseCases: MessageUseCases,
-    private readonly conversationUseCases: ConversationUseCases,
+    private readonly messageRepository: MessageRepositoryInterface,
+    private readonly conversationRepository: ConversationRepositoryInterface,
     options?: { idempotencyTtlSeconds?: number; maxMetadataBytes?: number }
   ) {
     this.idempotencyTtlSeconds = options?.idempotencyTtlSeconds ?? 15 * 60; // 15 min
@@ -47,48 +41,37 @@ export class MessageIngestionService {
   }
 
   async ingestIncoming(input: IngestIncomingInput): Promise<MessageEntity> {
-    const { channelId, conversationId, providerMessageId, body, from, to } = input;
-    const contentType = input.contentType ?? 'text';
-    const timestamp = input.timestamp ?? new Date();
+    const { channel_id, content_type, conversation_id, provider_message_id, message, from, to, payload } = input;
     const metadata = this.truncateMetadata(input.metadata);
 
     // Idempotencia (best-effort)
-    if (providerMessageId) {
-      const key = this.buildIdemKey(channelId, providerMessageId);
-      const exists = await this.redis.exists(key);
-      if (exists) {
-        // Buscar y retornar último mensaje para la conversación como fallback
-        const latest = await this.messageUseCases.getLatestMessage(conversationId);
-        if (latest) return latest;
-      }
+    const key = this.buildIdemKey(channel_id, provider_message_id);
+    const exists = await this.redis.exists(key);
+    if (exists) {
+      // Buscar y retornar último mensaje para la conversación como fallback
+      const latest = await this.messageRepository.findLatestByConversation(conversation_id);
+      if (latest) return latest;
     }
 
     // Persistir mensaje
-    const saved = await this.messageUseCases.sendMessage({
-      from,
+    const saved = await this.messageRepository.create({
       to,
-      message: body,
-      payload: undefined,
+      from,
+      message,
+      payload,
       metadata,
+      content_type,
+      conversation_id,
+      status: MessageStatus.RECEIVED,
       direction: MessageDirection.incoming,
-      conversation_id: conversationId,
-      content_type: contentType
     });
 
-    // Marcar como RECEIVED
-    await this.messageUseCases.updateMessageStatus(saved.id, MessageStatus.RECEIVED);
-
     // Actualizar last_message_at
-    await this.conversationUseCases.updateLastMessage(conversationId, timestamp);
+    await this.conversationRepository.updateLastMessage(conversation_id, saved.timestamp);
 
     // Set idempotencia
-    if (providerMessageId) {
-      const key = this.buildIdemKey(channelId, providerMessageId);
-      await this.redis.setEx(key, this.idempotencyTtlSeconds, '1');
-    }
+    await this.redis.setEx(key, this.idempotencyTtlSeconds, '1');
 
     return saved;
   }
 }
-
-

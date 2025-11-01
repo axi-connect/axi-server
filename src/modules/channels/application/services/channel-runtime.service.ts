@@ -2,20 +2,19 @@ import { ChannelProvider } from '@prisma/client';
 import { AuthSessionService } from './auth-session.service.js';
 import { type ChannelEntity } from '@/modules/channels/domain/entities/channel.js';
 import { type Contact } from '@/modules/conversations/domain/entities/conversation.js';
+import { ChannelStatus, WebSocketEvent } from '@/modules/channels/domain/entities/channel.js';
 import { WhatsappProvider } from '@/modules/channels/infrastructure/providers/WhatsappProvider.js';
 import { BaseProvider, ProviderConfig } from '@/modules/channels/infrastructure/providers/BaseProvider.js';
-import { ChannelStatus, RuntimeMessage, WebSocketEvent } from '@/modules/channels/domain/entities/channel.js';
 import { ChannelRepositoryInterface } from '@/modules/channels/domain/repositories/channel-repository.interface.js';
-import { MessageIngestionService } from '@/modules/conversations/application/services/message-ingestion.service.js';
 import { ConversationResolver } from '@/modules/conversations/application/services/conversation-resolver.service.js';
-
+import { IngestIncomingInput, MessageIngestionService } from '@/modules/conversations/application/services/message-ingestion.service.js';
 /**
  * Servicio principal de runtime para gestión de canales activos
  * Mantiene instancias de providers en memoria y gestiona su ciclo de vida
 */
 export class ChannelRuntimeService {
     private conversationResolver?: ConversationResolver;
-    // private messageIngestion?: MessageIngestionService;
+    private messageIngestion?: MessageIngestionService;
     private activeProviders = new Map<string, BaseProvider>();
     private webSocketCallback?: (event: WebSocketEvent) => void;
 
@@ -35,9 +34,9 @@ export class ChannelRuntimeService {
         this.conversationResolver = resolver;
     }
 
-    // setMessageIngestion(ingestion: MessageIngestionService): void {
-    //     this.messageIngestion = ingestion;
-    // }
+    setMessageIngestion(ingestion: MessageIngestionService): void {
+        this.messageIngestion = ingestion;
+    }
 
     /**
      * Inicializa automáticamente todos los canales activos al arranque del sistema
@@ -269,59 +268,31 @@ export class ChannelRuntimeService {
     /**
      * Maneja mensajes entrantes del provider
     */
-    private async handleIncomingMessage(channelId: string, message: string, contact: Contact): Promise<void> {
+    private async handleIncomingMessage(channelId: string, message: IngestIncomingInput, contact: Contact): Promise<void> {
         try {
             // Resolver/crear conversación si el servicio está disponible
-            let conversationId: string | undefined = undefined;
+            let conversation_id: string | undefined = undefined;
             if (this.conversationResolver) {
                 if (contact.id) {
                     const conv = await this.conversationResolver.resolve({channelId, contact});
-                    conversationId = conv.id;
+                    conversation_id = conv.id;
                 }
             }
 
             // Ingestar mensaje persistente si hay conversación resuelta
-            // if (conversationId && this.messageIngestion) {
-            //     const providerMessageIdRaw = messageData?.id ?? messageData?.messageId ?? messageData?.msgId;
-            //     const providerMessageId: string | undefined = typeof providerMessageIdRaw === 'string' && providerMessageIdRaw.length > 0
-            //         ? providerMessageIdRaw
-            //         : undefined;
-            //     const body: string = String(messageData?.message ?? messageData?.content ?? messageData?.body ?? '');
-            //     const from: string | undefined = messageData?.sender ?? messageData?.from;
-            //     const to: string | undefined = messageData?.recipient ?? messageData?.to;
-            //     const ts: Date = messageData?.timestamp ? new Date(messageData.timestamp) : new Date();
-            //     const metadata: unknown = messageData?.metadata ?? messageData;
+            if (!conversation_id || !this.messageIngestion) return;
+            
+            message.conversation_id = conversation_id;
+            const savedMessage = await this.messageIngestion.ingestIncoming(message);
 
-            //     await this.messageIngestion.ingestIncoming({
-            //         channelId,
-            //         conversationId,
-            //         providerMessageId,
-            //         body,
-            //         from,
-            //         to,
-            //         timestamp: ts,
-            //         metadata,
-            //         contentType: 'text'
-            //     });
-            // }
-
-            // const runtimeMessage: RuntimeMessage = {
-            //     channelId,
-            //     content: message,
-            //     direction: 'incoming',
-            //     timestamp: new Date(),
-            //     metadata: contact.meta,
-            //     id: `msg_${Date.now()}`,
-            // };
-
-            // // Emitir evento WebSocket
-            // this.emitWebSocketEvent({
-            //     event: 'message.received',
-            //     channelId,
-            //     companyId: contact.company_id,
-            //     data: { ...runtimeMessage, conversationId },
-            //     timestamp: new Date()
-            // });
+            // Emitir evento WebSocket
+            this.emitWebSocketEvent({
+                channelId,
+                data: savedMessage,
+                event: 'message.received',
+                companyId: contact.company_id,
+                timestamp: new Date()
+            });
 
             console.log(`📨 Mensaje recibido en canal ${channelId}`);
         } catch (error) {

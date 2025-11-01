@@ -4,27 +4,28 @@ export interface MessageEntity {
   id: string;
   from?: string;
   to?: string;
-  message: string;
   payload?: any;
   metadata?: any;
-  direction: MessageDirection;
   timestamp: Date;
-  conversation_id: string;
-  status: MessageStatus;
-  content_type: string;
+  message: string;
   created_at: Date;
   updated_at: Date;
+  content_type: string;
+  status: MessageStatus;
+  conversation_id: string;
+  direction: MessageDirection;
 }
 
 export interface CreateMessageData {
   from?: string;
   to?: string;
-  message: string;
   payload?: any;
   metadata?: any;
-  direction: MessageDirection;
-  conversation_id: string;
+  message: string;
   content_type: string;
+  status?: MessageStatus;
+  conversation_id: string;
+  direction: MessageDirection;
 }
 
 export interface UpdateMessageData {
