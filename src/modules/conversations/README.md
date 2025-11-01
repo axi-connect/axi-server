@@ -39,7 +39,6 @@ Enums referenciados de Prisma (`channels` schema): `ContactType`, `MessageDirect
   - `getMessageById(id)`
   - `getMessagesByConversation(conversation_id, criteria?)`
   - `updateMessage(id, input)` / `updateMessageStatus(id, status)`
-  - `getLatestMessage(conversation_id)` / `countMessages(conversation_id)`
 - `AttachmentUseCases` (contrato para futuro repositorio de adjuntos)
 
 ### Repositorios (Infrastructure)

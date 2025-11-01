@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { HttpError } from '@/shared/errors/http.error.js';
 import { ResponseDto } from '@/shared/dto/response.dto.js';
+import { MessageSearchCriteria } from '../../domain/repositories/message-repository.interface.js';
 import { MessageUseCases } from '@/modules/conversations/application/use-cases/message.usecases.js';
 
 export class MessageController {
@@ -35,8 +36,9 @@ export class MessageController {
 
   getMessagesByConversation = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { conversationId } = req.params;
-      const messages = await this.messageUseCases.getMessagesByConversation(conversationId);
+      const conversation_id = req.params.conversation_id;
+      const criteria = (res.locals.searchCriteria ?? {}) as MessageSearchCriteria;
+      const messages = await this.messageUseCases.getMessagesByConversation({ conversation_id, ...criteria });
 
       const responseDto = new ResponseDto(true, 'Messages retrieved successfully', messages, 200);
       res.status(200).json(responseDto);

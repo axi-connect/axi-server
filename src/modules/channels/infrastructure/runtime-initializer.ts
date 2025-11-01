@@ -20,7 +20,7 @@ export async function initializeChannelRuntime(io: SocketIOServer): Promise<{
 
   // Inicializar canales activos automáticamente
   try {
-    await container.initializeActiveChannels();
+    // await container.initializeActiveChannels();
     console.log('✅ Canales activos inicializados');
   } catch (error) {
     console.error('⚠️ Error inicializando canales activos, continuando...', error);

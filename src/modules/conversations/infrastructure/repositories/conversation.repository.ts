@@ -117,9 +117,7 @@ export class ConversationRepository implements ConversationRepositoryInterface {
 
   async delete(id: string): Promise<boolean> {
     try {
-      await this.prisma.conversation.delete({
-        where: { id }
-      });
+      await this.prisma.conversation.delete({where: { id }});
       return true;
     } catch {
       return false;

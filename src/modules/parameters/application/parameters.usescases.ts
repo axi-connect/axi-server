@@ -1,6 +1,6 @@
 // import * as flows from '../../channels/whatsapp/application/flows/index.js';
 // TODO: import flows
-const flows:any = {};
+const flows:any = {'exitFlow': () => {}};
 import { ParametersRepository } from "../infrastructure/parameters.repository.js";
 import { AIRequirement, AgentCharacter, CompanySchedule, Intention } from "@prisma/client";
 import { AgentCharacterCreateInput, createAIRequirement, createIntentionInterface } from "../domain/parameters.interface.js";

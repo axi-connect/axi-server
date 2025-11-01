@@ -9,33 +9,20 @@ export class ConversationController {
 
   listConversations = async (req: Request, res: Response): Promise<void> => {
     try {
-      const {
-        status,
-        limit,
-        offset,
-        sortBy,
-        sortDir,
-        date_to,
-        date_from,
-        channel_id,
-        participant_id,
-        participant_type,
-        assigned_agent_id,
-      } = (res.locals.searchCriteria ?? req.query) as ConversationSearchInput;
-
+      const rawCriteria = (res.locals.searchCriteria ?? req.query) as ConversationSearchInput;
+      const directFields = ['status','sortBy','sortDir','channel_id','contact_id','contact_type','assigned_agent_id'] as const;
+      // Construir criteria de forma declarativa
       const criteria: ConversationSearchInput = {
-        status,
-        sortBy,
-        sortDir,
-        channel_id,
-        participant_id,
-        participant_type,
-        assigned_agent_id,
-        date_to: parseDateSafe(date_to),
-        offset: Math.max(offset ?? 0, 0),
-        date_from: parseDateSafe(date_from),
-        limit: Math.min(Math.max(limit ?? 0, 1), 100),
-      } as const;
+        ...Object.fromEntries(
+          directFields
+            .filter(field => rawCriteria[field] !== undefined)
+            .map(field => [field, rawCriteria[field]])
+        ),
+        date_from: parseDateSafe(rawCriteria.date_from),
+        date_to: parseDateSafe(rawCriteria.date_to),
+        offset: Math.max(rawCriteria.offset ?? 0, 0),
+        limit: Math.min(Math.max(rawCriteria.limit ?? 0, 1), 100),
+      };
 
       const conversations = await this.conversationUseCases.listConversations(criteria);
       const responseDto = new ResponseDto(true, 'Conversations retrieved successfully', conversations, 200);
@@ -83,6 +70,20 @@ export class ConversationController {
       const conversation = await this.conversationUseCases.updateConversation(id, req.body);
 
       const responseDto = new ResponseDto(true, 'Conversation updated successfully', conversation, 200);
+      res.status(200).json(responseDto);
+    } catch (error: unknown) {
+      const statusCode = error instanceof HttpError ? error.statusCode : 500;
+      const message = error instanceof Error ? error.message : 'Internal server error';
+      const responseDto = new ResponseDto(false, message, null, statusCode);
+      res.status(statusCode).json(responseDto);
+    }
+  };
+
+  deleteConversation = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const deleted = await this.conversationUseCases.deleteConversation(id);
+      const responseDto = new ResponseDto(true, 'Conversation deleted successfully', deleted, 200);
       res.status(200).json(responseDto);
     } catch (error: unknown) {
       const statusCode = error instanceof HttpError ? error.statusCode : 500;

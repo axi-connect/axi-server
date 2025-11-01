@@ -108,6 +108,176 @@ paths:
           description: No autorizado
         '500':
           description: Error interno
+  /conversations/{id}:
+    delete:
+      summary: Eliminar conversación
+      description: Elimina una conversación por ID. Requiere permisos de delete.
+      tags: [Conversations]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+          description: ID de la conversación a eliminar
+      responses:
+        '200':
+          description: Conversación eliminada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseDeleteResult'
+              examples:
+                success:
+                  value:
+                    successful: true
+                    message: Conversation deleted successfully
+                    statusCode: 200
+                    data: true
+        '400': { description: Parámetros inválidos }
+        '401': { description: No autenticado }
+        '403': { description: No autorizado }
+        '404': { description: Conversación no encontrada }
+        '500': { description: Error interno }
+  /messages:
+    post:
+      summary: Enviar/crear mensaje
+      description: Crea un nuevo mensaje asociado a una conversación.
+      tags: [Messages]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMessageRequest'
+            examples:
+              create:
+                value:
+                  from: "+573001234567"
+                  to: "+573009998888"
+                  message: "Hola, ¿en qué puedo ayudarte?"
+                  metadata: { source: "inbox" }
+                  direction: "outgoing"
+                  conversation_id: "11111111-2222-3333-4444-555555555555"
+                  content_type: "text"
+      responses:
+        '201':
+          description: Mensaje creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessage'
+        '400': { description: Datos inválidos }
+        '401': { description: No autenticado }
+        '403': { description: No autorizado }
+        '404': { description: Conversación no encontrada }
+        '500': { description: Error interno }
+  /messages/{conversation_id}:
+    get:
+      summary: Listar mensajes por conversación
+      description: Retorna mensajes de una conversación con filtros y paginación.
+      tags: [Messages]
+      parameters:
+        - in: path
+          name: conversation_id
+          required: true
+          schema: { type: string, format: uuid }
+          description: ID de la conversación
+        - in: query
+          name: direction
+          schema: { type: string, enum: [incoming, outgoing] }
+        - in: query
+          name: status
+          schema: { type: string, enum: [PENDING, SENT, DELIVERED, READ, FAILED, RECEIVED] }
+        - in: query
+          name: content_type
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string }
+        - in: query
+          name: to
+          schema: { type: string }
+        - in: query
+          name: date_from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: date_to
+          schema: { type: string, format: date-time }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0 }
+        - in: query
+          name: sortBy
+          schema: { type: string, enum: [timestamp, created_at] }
+        - in: query
+          name: sortDir
+          schema: { type: string, enum: [asc, desc] }
+      responses:
+        '200':
+          description: Listado de mensajes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessageList'
+        '400': { description: Parámetros inválidos }
+        '401': { description: No autenticado }
+        '403': { description: No autorizado }
+        '404': { description: Conversación no encontrada }
+        '500': { description: Error interno }
+  /messages/{id}:
+    get:
+      summary: Obtener mensaje por ID
+      tags: [Messages]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Mensaje encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessage'
+        '400': { description: Parámetros inválidos }
+        '401': { description: No autenticado }
+        '403': { description: No autorizado }
+        '404': { description: Mensaje no encontrado }
+        '500': { description: Error interno }
+  /messages/{id}/status:
+    put:
+      summary: Actualizar estado del mensaje
+      tags: [Messages]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMessageStatusRequest'
+            examples:
+              update:
+                value: { status: "READ" }
+      responses:
+        '200':
+          description: Estado actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseMessage'
+        '400': { description: Datos inválidos }
+        '401': { description: No autenticado }
+        '403': { description: No autorizado }
+        '404': { description: Mensaje no encontrado }
+        '500': { description: Error interno }
     post:
       summary: Crear conversación
       description: >-
@@ -315,3 +485,70 @@ components:
         avatar:
           type: string
           format: uri
+
+    ResponseDeleteResult:
+      type: object
+      properties:
+        successful: { type: boolean }
+        message: { type: string }
+        statusCode: { type: integer }
+        data: { type: boolean }
+
+    CreateMessageRequest:
+      type: object
+      required: [message, direction, conversation_id, content_type]
+      properties:
+        from: { type: string }
+        to: { type: string }
+        message: { type: string }
+        payload: { type: object, additionalProperties: true }
+        metadata: { type: object, additionalProperties: true }
+        direction: { type: string, enum: [incoming, outgoing] }
+        conversation_id: { type: string, format: uuid }
+        content_type: { type: string }
+
+    UpdateMessageStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [PENDING, SENT, DELIVERED, READ, FAILED, RECEIVED]
+
+    MessageEntity:
+      type: object
+      required: [id, message, direction, timestamp, conversation_id, status, content_type, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        from: { type: string }
+        to: { type: string }
+        message: { type: string }
+        payload: { type: object, additionalProperties: true }
+        metadata: { type: object, additionalProperties: true }
+        direction: { type: string, enum: [incoming, outgoing] }
+        timestamp: { type: string, format: date-time }
+        conversation_id: { type: string, format: uuid }
+        status: { type: string, enum: [PENDING, SENT, DELIVERED, READ, FAILED, RECEIVED] }
+        content_type: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ResponseMessage:
+      type: object
+      properties:
+        successful: { type: boolean }
+        message: { type: string }
+        statusCode: { type: integer }
+        data:
+          $ref: '#/components/schemas/MessageEntity'
+
+    ResponseMessageList:
+      type: object
+      properties:
+        successful: { type: boolean }
+        message: { type: string }
+        statusCode: { type: integer }
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageEntity'

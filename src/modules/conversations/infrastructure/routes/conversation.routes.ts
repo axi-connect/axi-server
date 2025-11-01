@@ -11,6 +11,7 @@ import { AgentsRepository } from '@/modules/identities/agents/infrastructure/age
 import { CompaniesRepository } from '@/modules/identities/companies/infrastructure/companies.repository.js';
 import { ConversationValidator } from '@/modules/conversations/infrastructure/validators/conversation.validator.js';
 import { ConversationRepository } from '@/modules/conversations/infrastructure/repositories/conversation.repository.js';
+import { ChannelRepository } from '@/modules/channels/infrastructure/repositories/channel.repository.js';
 
 /**
  * Create and configure conversation routes
@@ -25,8 +26,9 @@ export function createConversationRouter(prisma: PrismaClient): Router {
   // Initialize use cases
   const agentsRepository = new AgentsRepository();
   const companiesRepository = new CompaniesRepository();
+  const channelRepository = new ChannelRepository(prisma);
   const messageUseCases = new MessageUseCases(messageRepository);
-  const conversationUseCases = new ConversationUseCases(conversationRepository, messageRepository, companiesRepository, agentsRepository);
+  const conversationUseCases = new ConversationUseCases(conversationRepository, messageRepository, companiesRepository, agentsRepository, channelRepository);
 
   // Initialize controllers
   const messageController = new MessageController(messageUseCases);
@@ -66,6 +68,14 @@ export function createConversationRouter(prisma: PrismaClient): Router {
     authorize('/conversations', 'update'),
     validateIdParam('id', 'uuid'),
     conversationController.updateConversation
+  );
+
+  // DELETE /:id - Delete conversation
+  conversationRouter.delete(
+    '/:id',
+    authorize('/conversations', 'delete'),
+    validateIdParam('id', 'uuid'),
+    conversationController.deleteConversation
   );
 
   // PUT /:id/assign-agent - Assign agent to conversation

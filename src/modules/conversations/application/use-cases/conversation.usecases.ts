@@ -4,6 +4,7 @@ import type { MessageEntity } from '@/modules/conversations/domain/entities/mess
 import type { Contact, ConversationDto } from '@/modules/conversations/domain/entities/conversation.js';
 import { AgentsRepository } from '@/modules/identities/agents/infrastructure/agents.repository.js';
 import type { CompaniesRepository } from '@/modules/identities/companies/infrastructure/companies.repository.js';
+import { ChannelRepositoryInterface } from '@/modules/channels/domain/repositories/channel-repository.interface.js';
 import { MessageRepositoryInterface } from '@/modules/conversations/domain/repositories/message-repository.interface.js';
 import type { ConversationEntity, CreateConversationData, UpdateConversationData } from '@/modules/conversations/domain/entities/conversation.js';
 import type { ConversationRepositoryInterface, ConversationSearchCriteria } from '@/modules/conversations/domain/repositories/conversation-repository.interface.js';
@@ -34,6 +35,7 @@ export class ConversationUseCases {
     private messageRepository: MessageRepositoryInterface,
     private companiesRepository: CompaniesRepository,
     private agentsRepository: AgentsRepository,
+    private channelRepository: ChannelRepositoryInterface,
   ) {}
 
   async createConversation(input: CreateConversationData): Promise<ConversationEntity> {
@@ -45,6 +47,11 @@ export class ConversationUseCases {
     if (existing) throw new HttpError(409, `Conversation with external_id '${input.external_id}' already exists for this channel`);
 
     const { company_id, channel_id, external_id, contact_id, contact_meta, contact_type, assigned_agent_id} = input;
+
+    if(channel_id){
+      const channel = await this.channelRepository.findById(channel_id);
+      if (!channel) throw new HttpError(404, `Channel '${channel_id}' not found`);
+    }
 
     if (assigned_agent_id) {
       const exists = await this.agentsRepository.existsById(assigned_agent_id);
@@ -74,6 +81,10 @@ export class ConversationUseCases {
     };
 
     return this.conversationRepository.update(id, updateData);
+  }
+
+  async deleteConversation(id: string): Promise<boolean> {
+    return this.conversationRepository.delete(id);
   }
 
   async assignAgent(conversation_id: string, agent_id: number): Promise<ConversationEntity> {

@@ -3,29 +3,27 @@ import { MessageEntity, CreateMessageData, UpdateMessageData } from '../entities
 
 export interface MessageSearchCriteria {
   id?: string;
-  conversation_id?: string;
-  direction?: MessageDirection;
-  status?: MessageStatus;
-  content_type?: string;
-  from?: string;
   to?: string;
-  date_from?: Date;
+  from?: string;
   date_to?: Date;
   limit?: number;
   offset?: number;
-  sortBy?: 'timestamp' | 'created_at';
+  date_from?: Date;
+  content_type?: string;
+  status?: MessageStatus;
+  conversation_id?: string;
   sortDir?: 'asc' | 'desc';
+  direction?: MessageDirection;
+  sortBy?: 'timestamp' | 'created_at';
 }
 
 export interface MessageRepositoryInterface {
-  create(data: CreateMessageData): Promise<MessageEntity>;
-  findById(id: string): Promise<MessageEntity | null>;
-  findByConversation(conversation_id: string, criteria?: Omit<MessageSearchCriteria, 'conversation_id'>): Promise<MessageEntity[]>;
-  search(criteria: MessageSearchCriteria): Promise<{ messages: MessageEntity[], total: number }>;
-  update(id: string, data: UpdateMessageData): Promise<MessageEntity>;
   delete(id: string): Promise<boolean>;
+  findById(id: string): Promise<MessageEntity | null>;
+  create(data: CreateMessageData): Promise<MessageEntity>;
   countByConversation(conversation_id: string): Promise<number>;
+  update(id: string, data: UpdateMessageData): Promise<MessageEntity>;
+  findByConversation(criteria: MessageSearchCriteria): Promise<MessageEntity[]>;
   findLatestByConversation(conversation_id: string): Promise<MessageEntity | null>;
-  updateStatus(id: string, status: MessageStatus): Promise<MessageEntity>;
-  bulkUpdateStatus(ids: string[], status: MessageStatus): Promise<MessageEntity[]>;
+  search(criteria: MessageSearchCriteria): Promise<{ messages: MessageEntity[], total: number }>;
 }
