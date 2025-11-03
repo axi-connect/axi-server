@@ -11,10 +11,10 @@ export interface ConversationSearchCriteria {
   company_id?: number;
   channel_id?: string;
   external_id?: string;
-  participant_id?: string;
-  sortDir?: 'asc' | 'desc';
+  contact_id?: string;
+  contact_type?: ContactType;
   assigned_agent_id?: number;
-  participant_type?: ContactType;
+  sortDir?: 'asc' | 'desc';
   sortBy?: 'created_at' | 'updated_at' | 'last_message_at';
 }
 

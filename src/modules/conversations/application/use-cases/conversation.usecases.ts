@@ -15,20 +15,6 @@ export interface UpdateConversationInput {
   contact_meta?: any;
 }
 
-export interface ConversationSearchInput {
-  status?: string;
-  channel_id?: string;
-  assigned_agent_id?: number;
-  contact_id?: string;
-  contact_type?: ContactType;
-  date_from?: Date;
-  date_to?: Date;
-  limit?: number;
-  offset?: number;
-  sortBy?: 'created_at' | 'updated_at' | 'last_message_at';
-  sortDir?: 'asc' | 'desc';
-}
-
 export class ConversationUseCases {
   constructor(
     private conversationRepository: ConversationRepositoryInterface,
@@ -73,44 +59,8 @@ export class ConversationUseCases {
     return this.conversationRepository.findByExternalId(external_id, channel_id);
   }
 
-  async updateConversation(id: string, input: UpdateConversationInput): Promise<ConversationEntity> {
-    const updateData: UpdateConversationData = {
-      status: input.status,
-      assigned_agent_id: input.assigned_agent_id,
-      contact_meta: input.contact_meta
-    };
-
-    return this.conversationRepository.update(id, updateData);
-  }
-
-  async deleteConversation(id: string): Promise<boolean> {
-    return this.conversationRepository.delete(id);
-  }
-
-  async assignAgent(conversation_id: string, agent_id: number): Promise<ConversationEntity> {
-    return this.conversationRepository.assignAgent(conversation_id, agent_id);
-  }
-
-  async unassignAgent(conversation_id: string): Promise<ConversationEntity> {
-    return this.conversationRepository.unassignAgent(conversation_id);
-  }
-
-  async updateLastMessage(conversation_id: string, timestamp: Date): Promise<ConversationEntity> {
-    return this.conversationRepository.updateLastMessage(conversation_id, timestamp);
-  }
-
-  async getActiveConversationsByAgent(agent_id: number): Promise<ConversationEntity[]> {
-    return this.conversationRepository.findActiveByAgent(agent_id);
-  }
-
-  async countConversationsByAgent(agent_id: number): Promise<number> {
-    return this.conversationRepository.countByAgent(agent_id);
-  }
-
-  async listConversations(criteria?: ConversationSearchInput): Promise<ConversationDto[]> {
-    const searchCriteria: ConversationSearchCriteria = criteria ?? {};
-
-    const { conversations } = await this.conversationRepository.search(searchCriteria);
+  async listConversations(criteria: ConversationSearchCriteria): Promise<ConversationDto[]> {
+    const { conversations } = await this.conversationRepository.search(criteria);
 
     const results: ConversationDto[] = [];
     for (const conv of conversations) {
@@ -162,5 +112,39 @@ export class ConversationUseCases {
     }
 
     return results;
+  }
+
+  async updateConversation(id: string, input: UpdateConversationInput): Promise<ConversationEntity> {
+    const updateData: UpdateConversationData = {
+      status: input.status,
+      assigned_agent_id: input.assigned_agent_id,
+      contact_meta: input.contact_meta
+    };
+
+    return this.conversationRepository.update(id, updateData);
+  }
+
+  async deleteConversation(id: string): Promise<boolean> {
+    return this.conversationRepository.delete(id);
+  }
+
+  async assignAgent(conversation_id: string, agent_id: number): Promise<ConversationEntity> {
+    return this.conversationRepository.assignAgent(conversation_id, agent_id);
+  }
+
+  async unassignAgent(conversation_id: string): Promise<ConversationEntity> {
+    return this.conversationRepository.unassignAgent(conversation_id);
+  }
+
+  async updateLastMessage(conversation_id: string, timestamp: Date): Promise<ConversationEntity> {
+    return this.conversationRepository.updateLastMessage(conversation_id, timestamp);
+  }
+
+  async getActiveConversationsByAgent(agent_id: number): Promise<ConversationEntity[]> {
+    return this.conversationRepository.findActiveByAgent(agent_id);
+  }
+
+  async countConversationsByAgent(agent_id: number): Promise<number> {
+    return this.conversationRepository.countByAgent(agent_id);
   }
 }

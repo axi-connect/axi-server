@@ -1,5 +1,5 @@
 import { ChannelProvider } from '@prisma/client';
-import { WebSocketEvent } from '../../domain/entities/channel.js';
+import { WebSocketEvent, WebSocketEventName } from '../../domain/entities/channel.js';
 import { Contact } from '@/modules/conversations/domain/entities/conversation.js';
 import { IngestIncomingInput } from '@/modules/conversations/application/services/message-ingestion.service.js';
 
@@ -12,7 +12,7 @@ export interface ProviderConfig {
   webhookUrl?: string;
   accessToken?: string;
   phoneNumberId?: string;
-  emitEventCallback: (event: WebSocketEvent) => void;
+  emitEventCallback: (event: WebSocketEvent<WebSocketEventName>) => void;
 }
 
 export interface MessagePayload {

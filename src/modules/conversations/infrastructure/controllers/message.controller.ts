@@ -38,7 +38,7 @@ export class MessageController {
     try {
       const conversation_id = req.params.conversation_id;
       const criteria = (res.locals.searchCriteria ?? {}) as MessageSearchCriteria;
-      const messages = await this.messageUseCases.getMessagesByConversation({ conversation_id, ...criteria });
+      const messages = await this.messageUseCases.getMessagesByConversation({ ...criteria, conversation_id });
 
       const responseDto = new ResponseDto(true, 'Messages retrieved successfully', messages, 200);
       res.status(200).json(responseDto);

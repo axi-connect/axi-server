@@ -43,7 +43,7 @@ const searchSchema = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(20).label('límite'),
   offset: Joi.number().integer().min(0).default(0).label('desplazamiento'),
   sortBy: Joi.string().valid('timestamp', 'created_at').default('timestamp').label('ordenar por'),
-  sortDir: Joi.string().valid('asc', 'desc').default('desc').label('dirección de orden'),
+  sortDir: Joi.string().valid('asc', 'desc').default('asc').label('dirección de orden'),
 }).messages(baseMessages);
 
 export class MessageValidator {

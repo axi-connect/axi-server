@@ -29,16 +29,17 @@ const createSchema = Joi.object({
 
 const searchSchema = Joi.object({
   status: Joi.string().trim().optional().label('estado'),
-  channel_id: Joi.string().uuid().optional().label('canal'),
-  assigned_agent_id: Joi.number().integer().min(1).optional().label('agente asignado'),
   contact_id: Joi.string().optional().label('id contacto'),
-  contact_type: Joi.string().valid(...Object.values(ContactType)).optional().label('tipo de contacto'),
-  date_from: Joi.date().iso().optional().label('fecha desde'),
+  channel_id: Joi.string().uuid().optional().label('canal'),
   date_to: Joi.date().iso().optional().label('fecha hasta'),
-  limit: Joi.number().integer().min(1).max(100).default(20).label('límite'),
+  date_from: Joi.date().iso().optional().label('fecha desde'),
+  id: Joi.string().uuid().optional().label('id de conversación'),
   offset: Joi.number().integer().min(0).default(0).label('desplazamiento'),
-  sortBy: Joi.string().valid('created_at', 'updated_at', 'last_message_at').default('updated_at').label('ordenar por'),
+  limit: Joi.number().integer().min(1).max(100).default(20).label('límite'),
+  assigned_agent_id: Joi.number().integer().min(1).optional().label('agente asignado'),
   sortDir: Joi.string().valid('asc', 'desc').default('desc').label('dirección de orden'),
+  contact_type: Joi.string().valid(...Object.values(ContactType)).optional().label('tipo de contacto'),
+  sortBy: Joi.string().valid('created_at', 'updated_at', 'last_message_at').default('updated_at').label('ordenar por'),
 }).messages(baseMessages);
 
 export class ConversationValidator {

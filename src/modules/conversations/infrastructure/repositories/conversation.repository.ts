@@ -47,9 +47,9 @@ export class ConversationRepository implements ConversationRepositoryInterface {
 
     if (criteria) {
       if (criteria.status) where.status = criteria.status;
+      if (criteria.contact_id) where.contact_id = criteria.contact_id;
+      if (criteria.contact_type) where.contact_type = criteria.contact_type;
       if (criteria.assigned_agent_id) where.assigned_agent_id = criteria.assigned_agent_id;
-      if (criteria.participant_id) where.participant_id = criteria.participant_id;
-      if (criteria.participant_type) where.participant_type = criteria.participant_type;
       if (criteria.date_from || criteria.date_to) {
         where.created_at = {};
         if (criteria.date_from) where.created_at.gte = criteria.date_from;
@@ -74,10 +74,10 @@ export class ConversationRepository implements ConversationRepositoryInterface {
     if (criteria.status) where.status = criteria.status;
     if (criteria.company_id) where.company_id = criteria.company_id;
     if (criteria.channel_id) where.channel_id = criteria.channel_id;
+    if (criteria.contact_id) where.contact_id = criteria.contact_id;
     if (criteria.external_id) where.external_id = criteria.external_id;
+    if (criteria.contact_type) where.contact_type = criteria.contact_type;
     if (criteria.assigned_agent_id) where.assigned_agent_id = criteria.assigned_agent_id;
-    if (criteria.participant_id) where.participant_id = criteria.participant_id;
-    if (criteria.participant_type) where.participant_type = criteria.participant_type;
     if (criteria.date_from || criteria.date_to) {
       where.created_at = {};
       if (criteria.date_from) where.created_at.gte = criteria.date_from;

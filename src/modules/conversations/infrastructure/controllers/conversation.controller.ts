@@ -2,17 +2,18 @@ import { Request, Response } from 'express';
 import { HttpError } from '@/shared/errors/http.error.js';
 import { ResponseDto } from '@/shared/dto/response.dto.js';
 import { parseDateSafe } from '@/shared/utils/utils.shared.js';
-import { ConversationSearchInput, ConversationUseCases } from '@/modules/conversations/application/use-cases/conversation.usecases.js';
+import { ConversationUseCases } from '@/modules/conversations/application/use-cases/conversation.usecases.js';
+import { ConversationSearchCriteria } from '@/modules/conversations/domain/repositories/conversation-repository.interface.js';
 
 export class ConversationController {
   constructor(private conversationUseCases: ConversationUseCases) {}
 
   listConversations = async (req: Request, res: Response): Promise<void> => {
     try {
-      const rawCriteria = (res.locals.searchCriteria ?? req.query) as ConversationSearchInput;
+      const rawCriteria = (res.locals.searchCriteria ?? req.query) as ConversationSearchCriteria;
       const directFields = ['status','sortBy','sortDir','channel_id','contact_id','contact_type','assigned_agent_id'] as const;
       // Construir criteria de forma declarativa
-      const criteria: ConversationSearchInput = {
+      const criteria: ConversationSearchCriteria = {
         ...Object.fromEntries(
           directFields
             .filter(field => rawCriteria[field] !== undefined)

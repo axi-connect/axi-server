@@ -1,4 +1,5 @@
 import { ChannelType, ChannelProvider } from '@prisma/client';
+import type { MessageEntity } from '@/modules/conversations/domain/entities/message.js';
 
 export interface ChannelEntity {
   id: string;
@@ -47,10 +48,36 @@ export interface ChannelStatus {
   isAuthenticated: boolean;
 }
 
-export interface WebSocketEvent {
-  event: string;
+// Eventos tipados para WebSocket (runtime/gateway)
+export type ChannelEvents =
+  | 'channel.started'
+  | 'channel.stopped'
+  | 'channel.error'
+  | 'channel.disconnected'
+  | 'channel.authenticated';
+
+export type MessageEvents =
+  | 'message.received'
+  | 'message.sent';
+
+export type SystemEvents = never; // Reservado para futuros eventos del sistema
+
+export type WebSocketEventName = ChannelEvents | MessageEvents | SystemEvents;
+
+export interface WebSocketEventDataMap {
+  'channel.started': { provider: ChannelProvider; type: ChannelType };
+  'channel.stopped': { provider: ChannelProvider };
+  'channel.error': { error: string };
+  'channel.disconnected': { reason?: string };
+  'channel.authenticated': { reason: string };
+  'message.received': MessageEntity; // Mensaje persistido/ingestado
+  'message.sent': { messageId: string; result?: unknown } | MessageEntity;
+}
+
+export interface WebSocketEvent<T extends WebSocketEventName = WebSocketEventName> {
+  event: T;
   channelId: string;
   companyId: number;
-  data: any;
+  data: WebSocketEventDataMap[T];
   timestamp: Date;
 }

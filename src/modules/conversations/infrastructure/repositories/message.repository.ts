@@ -29,6 +29,7 @@ export class MessageRepository implements MessageRepositoryInterface {
 
   async findByConversation(criteria: MessageSearchCriteria): Promise<MessageEntity[]> {
     const where: any = this.buildWhereClause(criteria);
+    console.log(where);
 
     const messages = await this.prisma.messageLog.findMany({
       where,
@@ -131,5 +132,7 @@ export class MessageRepository implements MessageRepositoryInterface {
         ...(criteria.date_to && { lte: criteria.date_to }),
       };
     }
+
+    return where;
   }
 }
