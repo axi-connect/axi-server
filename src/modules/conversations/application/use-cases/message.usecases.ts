@@ -1,13 +1,23 @@
 import { MessageStatus } from '@prisma/client';
 import { HttpError } from '@/shared/errors/http.error.js';
-import { MessageEntity, CreateMessageData } from '../../domain/entities/message.js';
+import type { MessageInput, MessageEntity } from '../../domain/entities/message.js';
+import type { ProviderResponse } from '@/modules/channels/infrastructure/providers/BaseProvider.js';
+import { ChannelRuntimeService } from '@/modules/channels/application/services/channel-runtime.service.js';
 import { MessageRepositoryInterface, MessageSearchCriteria } from '../../domain/repositories/message-repository.interface.js';
 
 export class MessageUseCases {
-  constructor(private messageRepository: MessageRepositoryInterface) {}
+  constructor(
+    private runtimeService: ChannelRuntimeService,
+    private messageRepository: MessageRepositoryInterface,
+  ) {}
 
-  async sendMessage(input: CreateMessageData): Promise<MessageEntity> {
-    return this.messageRepository.create(input);
+  /**
+   * Envía un mensaje a través del runtime
+   * @param input - Datos del mensaje
+   * @returns Mensaje creado
+  */
+  async sendMessage(input: MessageInput): Promise<ProviderResponse> {
+    return await this.runtimeService.emitMessage(input);
   }
 
   async getMessageById(id: string): Promise<MessageEntity> {

@@ -1,7 +1,7 @@
 import { ChannelProvider } from '@prisma/client';
-import { WebSocketEvent, WebSocketEventName } from '../../domain/entities/channel.js';
 import { Contact } from '@/modules/conversations/domain/entities/conversation.js';
-import { IngestIncomingInput } from '@/modules/conversations/application/services/message-ingestion.service.js';
+import type { MessageInput } from '@/modules/conversations/domain/entities/message.js';
+import { type WebSocketEvent, type WebSocketEventName } from '../../domain/entities/channel.js';
 
 export interface ProviderConfig {
   apiKey?: string;
@@ -13,22 +13,6 @@ export interface ProviderConfig {
   accessToken?: string;
   phoneNumberId?: string;
   emitEventCallback: (event: WebSocketEvent<WebSocketEventName>) => void;
-}
-
-export interface MessagePayload {
-  to: string;
-  message: string;
-  type?: 'text' | 'template' | 'media';
-  media?: {
-    type: 'image' | 'video' | 'audio' | 'document';
-    url: string;
-    filename?: string;
-  };
-  template?: {
-    name: string;
-    language: string;
-    components: any[];
-  };
 }
 
 export interface ProviderResponse {
@@ -49,9 +33,9 @@ export interface WebhookMessage {
   metadata?: any;
 }
 
-type MessageHandlerData = {
+export type MessageHandlerData = {
   contact: Contact;
-  message: IngestIncomingInput;
+  message: MessageInput;
 };
 
 export abstract class BaseProvider {
@@ -64,24 +48,20 @@ export abstract class BaseProvider {
     this.provider = provider;
   }
 
-  abstract sendMessage(payload: MessagePayload): Promise<ProviderResponse>;
-
-  abstract validateCredentials(): Promise<boolean>;
-
+  abstract destroy(): Promise<void>;
+  
+  abstract getProviderName(): string;
+  
   abstract isAuthenticated(): Promise<boolean>;
+  
+  abstract validateCredentials(): Promise<boolean>;
 
   abstract parseWebhook(data: any): WebhookMessage | null;
 
-  abstract getProviderName(): string;
-
-  abstract destroy(): Promise<void>;
+  abstract sendMessage(payload: MessageInput): Promise<ProviderResponse>;
 
   setMessageHandler(handler: (data: MessageHandlerData) => Promise<void>): void {
     this.messageHandler = handler;
-  }
-
-  protected async emitMessage(data: any): Promise<void> {
-    if (this.messageHandler) await this.messageHandler(data);
   }
 
   protected getConfig(): ProviderConfig {

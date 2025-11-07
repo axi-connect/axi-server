@@ -1,14 +1,9 @@
 import { getRedisClient } from '@/database/redis.js';
 import { MessageDirection, MessageStatus } from '@prisma/client';
+import type { MessageInput} from '@/modules/conversations/domain/entities/message.js';
 import type { MessageEntity } from '@/modules/conversations/domain/entities/message.js';
-import type { CreateMessageData } from '@/modules/conversations/domain/entities/message.js';
 import type { MessageRepositoryInterface } from '@/modules/conversations/domain/repositories/message-repository.interface.js';
 import type { ConversationRepositoryInterface } from '@/modules/conversations/domain/repositories/conversation-repository.interface.js';
-
-export interface IngestIncomingInput extends Omit<CreateMessageData, 'direction' | 'status'> {
-  channel_id: string;
-  provider_message_id: string;
-}
 
 export class MessageIngestionService {
   private readonly redis = getRedisClient();
@@ -40,8 +35,8 @@ export class MessageIngestionService {
     }
   }
 
-  async ingestIncoming(input: IngestIncomingInput): Promise<MessageEntity> {
-    const { channel_id, content_type, conversation_id, provider_message_id, message, from, to, payload } = input;
+  async ingest(input: MessageInput): Promise<MessageEntity> {
+    const { channel_id, content_type, conversation_id, provider_message_id, message, from, to, payload, direction } = input;
     const metadata = this.truncateMetadata(input.metadata);
 
     // Idempotencia (best-effort)
@@ -62,8 +57,8 @@ export class MessageIngestionService {
       metadata,
       content_type,
       conversation_id,
+      direction: direction,
       status: MessageStatus.RECEIVED,
-      direction: MessageDirection.incoming,
     });
 
     // Actualizar last_message_at

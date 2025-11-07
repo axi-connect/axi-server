@@ -35,7 +35,7 @@ Esta carpeta contiene los handlers especializados para cada namespace de Socket.
 - Validación de contenido y permisos
 
 **Eventos principales**:
-- `send_message` → `message_sent` | `message_error`
+- `message_sent` | `message_error`
 - `message_received` (desde providers)
 
 ### `system.handler.ts`
@@ -82,13 +82,6 @@ channelSocket.emit('channel.join', {
 
 channelSocket.on('channel.joined', (data) => {
   console.log('Unido al canal:', data.channelId);
-});
-
-// 3. Enviar mensajes
-messageSocket.emit('send_message', {
-  channelId: 'abc-123',
-  message: 'Hola mundo!',
-  recipient: '+1234567890'
 });
 
 // 4. Health check del sistema

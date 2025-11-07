@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authorize } from '@/middlewares/rbac.middleware.js';
 import { validateIdParam } from '@/shared/validators.shared.js';
+import { ChannelsContainer } from '@/modules/channels/infrastructure/channels.container.js';
 import { MessageUseCases } from '@/modules/conversations/application/use-cases/message.usecases.js';
 import { MessageValidator } from '@/modules/conversations/infrastructure/validators/message.validator.js';
 import { MessageController } from '@/modules/conversations/infrastructure/controllers/message.controller.js';
@@ -17,7 +18,9 @@ export function createMessageRouter(prisma: PrismaClient): Router {
   const messageRepository = new MessageRepository(prisma);
 
   // Initialize use cases
-  const messageUseCases = new MessageUseCases(messageRepository);
+  const container = ChannelsContainer.getInstance();
+  const runtimeService = container.getRuntimeService();
+  const messageUseCases = new MessageUseCases(runtimeService, messageRepository);
 
   // Initialize controller
   const messageController = new MessageController(messageUseCases);
@@ -25,14 +28,14 @@ export function createMessageRouter(prisma: PrismaClient): Router {
   // Create router
   const messageRouter = Router();
 
-  // MESSAGES ROUTES
-  // POST / - Send a new message
-  messageRouter.post(
-    '/',
-    authorize('/messages', 'create'),
-    MessageValidator.validateCreate,
-    messageController.sendMessage
-  );
+    // MESSAGES ROUTES
+    // POST / - Send a new message
+    messageRouter.post(
+      '/',
+      authorize('/messages', 'create'),
+      MessageValidator.validateCreate,
+      messageController.sendMessage
+    );
 
   // GET /:id - Get message by ID
   messageRouter.get(

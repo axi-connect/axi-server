@@ -19,6 +19,7 @@ import { ConversationRepository } from '@/modules/conversations/infrastructure/r
 // Use Cases
 import { ChannelUseCases } from '../application/use-cases/channel.usecases.js';
 import { ChannelAuthUseCases } from '../application/use-cases/channel-auth.usecases.js';
+import { MessageRoutingService } from '@/modules/conversations/application/services/message-routing.service.js';
 
 /**
  * Contenedor de dependencias centralizado para el módulo Channels
@@ -81,16 +82,22 @@ export class ChannelsContainer {
             this.channelRepository,
             60 * 60 * 24
         );
-        this.runtimeService.setConversationResolver(conversationResolver);
 
         // Wire MessageIngestion pipeline (MessageUseCases + ConversationUseCases)
         const messageRepository = new MessageRepository(this.prisma);
         const messageIngestion = new MessageIngestionService(
             messageRepository,
             conversationRepository,
-            { idempotencyTtlSeconds: 15 * 60, maxMetadataBytes: 32 * 1024 }
+            { idempotencyTtlSeconds: 15 * 60, maxMetadataBytes: 32 * 1024 } // 15 minutes, 32KB
         );
-        this.runtimeService.setMessageIngestion(messageIngestion);
+
+        const messageRouting = new MessageRoutingService(
+            messageIngestion,
+            conversationResolver,
+            (event) => this.webSocketGateway.handleWebSocketEvent(event)
+        );
+          
+        this.runtimeService.setMessageRouterService(messageRouting);
     }
 
     /**
@@ -112,7 +119,6 @@ export class ChannelsContainer {
     }
 
     // Getters para acceder a las dependencias
-
     getChannelRepository(): ChannelRepository {
         return this.channelRepository;
     }

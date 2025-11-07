@@ -47,11 +47,6 @@ export class MessageHandler {
         namespace.on('connection', (socket: AuthenticatedSocket) => {
             console.log(`💬 Nueva conexión autenticada de mensajes: ${socket.id} (Usuario: ${socket.user?.email})`);
 
-            // Handler para envío de mensajes
-            socket.on('send_message', (data: SendMessageRequest) => {
-                this.handleSendMessage(socket, data, namespace);
-            });
-
             // Handler para mensajes entrantes (desde providers)
             socket.on('message_received', (data: IncomingMessageData) => {
                 this.handleIncomingMessage(socket, data);
@@ -62,96 +57,6 @@ export class MessageHandler {
                 this.handleDisconnect(socket);
             });
         });
-    }
-
-
-    /**
-     * Maneja envío de mensajes desde el cliente
-    */
-    private async handleSendMessage(
-        socket: AuthenticatedSocket,
-        data: SendMessageRequest,
-        namespace: Namespace
-    ): Promise<void> {
-        try {
-            const { channelId, message, recipient, metadata } = data;
-
-            // Validaciones de entrada
-            if (!channelId || typeof channelId !== 'string') {
-                socket.emit('message_error', {
-                    message: 'channelId requerido y debe ser un string',
-                    code: 'INVALID_CHANNEL_ID',
-                    request: data
-                });
-                return;
-            }
-
-            if (!message || typeof message !== 'string' || message.trim().length === 0) {
-                socket.emit('message_error', {
-                    message: 'message requerido y debe ser un string no vacío',
-                    code: 'INVALID_MESSAGE',
-                    request: data
-                });
-                return;
-            }
-
-            // Verificar que el canal esté activo
-            if (!this.runtimeService.isChannelActive(channelId)) {
-                socket.emit('message_error', {
-                    message: 'Canal no activo o no encontrado',
-                    code: 'CHANNEL_NOT_ACTIVE',
-                    channelId
-                });
-                return;
-            }
-
-            // Verificar que el socket esté unido al canal
-            if (!socket.rooms.has(`channel_${channelId}`)) {
-                socket.emit('message_error', {
-                    message: 'No estás unido a este canal',
-                    code: 'NOT_JOINED_TO_CHANNEL',
-                    channelId
-                });
-                return;
-            }
-
-            // Generar ID único para el mensaje
-            const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-            // Preparar payload del mensaje
-            const messagePayload = {
-                id: messageId,
-                content: message.trim(),
-                recipient,
-                metadata,
-                timestamp: new Date(),
-                fromUser: socket.user?.email,
-                channelId
-            };
-
-            // Enviar mensaje a través del runtime service
-            await this.runtimeService.emitMessage(channelId, messagePayload);
-
-            // Confirmar envío al cliente
-            const response: MessageSentResponse = {
-                id: messageId,
-                channelId,
-                status: 'sent',
-                timestamp: new Date()
-            };
-
-            socket.emit('message_sent', response);
-
-            console.log(`📤 Mensaje enviado desde usuario ${socket.user?.email} al canal ${channelId}`);
-        } catch (error: any) {
-            console.error('❌ Error enviando mensaje:', error);
-
-            socket.emit('message_error', {
-                message: error.message || 'Error interno enviando mensaje',
-                code: 'SEND_MESSAGE_ERROR',
-                channelId: data.channelId
-            });
-        }
     }
 
     /**
@@ -198,13 +103,6 @@ export class MessageHandler {
         console.log(`🔌 Usuario ${socket.user?.email} desconectado de mensajes`);
         // Aquí se pueden limpiar recursos específicos de mensajes si es necesario
         // Por ahora solo logging
-    }
-
-    /**
-     * Emite mensaje recibido a un canal específico
-    */
-    emitMessageToChannel(channelId: string, messageData: IncomingMessageData): void {
-        // Esto se haría desde el namespace padre usando namespace.to()
     }
 
     /**

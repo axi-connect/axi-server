@@ -289,13 +289,6 @@ src/modules/channels/
     }
   });
 
-  // Enviar mensaje
-  messageSocket.emit('send_message', {
-    channelId: 'abc-123',
-    message: 'Hola mundo desde WebSocket!',
-    recipient: '+1234567890' // opcional
-  });
-
   // Escuchar confirmación de envío
   messageSocket.on('message_sent', (data) => {
     console.log('✅ Mensaje enviado:', data);
@@ -872,9 +865,9 @@ src/modules/channels/
   "timestamp": "2024-01-15T10:30:00Z",
   "level": "info",
   "module": "channels",
-  "operation": "send_message",
   "channel_id": "uuid",
   "conversation_id": "uuid",
+  "operation": "message_sent",
   "duration_ms": 150,
   "success": true
 }

@@ -128,23 +128,9 @@ export class ChannelUseCases {
   }
 
   /**
-   * Envía un mensaje a través del runtime
-  */
-  async sendMessage(channelId: string, message: any): Promise<void> {
-    await this.runtimeService.emitMessage(channelId, message);
-  }
-
-  /**
    * Verifica si un canal está activo
   */
   isChannelActive(channelId: string): boolean {
     return this.runtimeService.isChannelActive(channelId);
-  }
-
-  /**
-   * Obtiene IDs de canales activos
-  */
-  getActiveChannelIds(): string[] {
-    return this.runtimeService.getActiveChannelIds();
   }
 }

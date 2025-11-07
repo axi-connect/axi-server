@@ -10,7 +10,6 @@ export class MessageController {
   sendMessage = async (req: Request, res: Response): Promise<void> => {
     try {
       const message = await this.messageUseCases.sendMessage(req.body);
-
       const responseDto = new ResponseDto(true, 'Message sent successfully', message, 201);
       res.status(201).json(responseDto);
     } catch (error: any) {

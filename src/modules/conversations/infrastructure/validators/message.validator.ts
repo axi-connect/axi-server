@@ -18,14 +18,15 @@ const baseMessages = {
 };
 
 const createSchema = Joi.object({
-  from: Joi.string().optional().label('remitente'),
-  to: Joi.string().optional().label('destinatario'),
+  from: Joi.string().required().label('remitente'),
+  to: Joi.string().required().label('destinatario'),
   message: Joi.string().min(1).required().label('mensaje'),
   payload: Joi.object().unknown(true).optional().label('payload'),
-  metadata: Joi.object().unknown(true).optional().label('metadata'),
-  direction: Joi.string().valid(...Object.values(MessageDirection)).required().label('dirección'),
-  conversation_id: Joi.string().guid({ version: ['uuidv4'] }).required().label('ID de la conversación'),
   content_type: Joi.string().min(1).required().label('tipo de contenido'),
+  metadata: Joi.object().unknown(true).optional().default({}).label('metadata'),
+  provider_message_id: Joi.string().optional().label('ID del mensaje del proveedor'),
+  channel_id: Joi.string().guid({ version: ['uuidv4'] }).required().label('ID del canal'),
+  conversation_id: Joi.string().guid({ version: ['uuidv4'] }).required().label('ID de la conversación'),
 }).messages(baseMessages);
 
 const updateStatusSchema = Joi.object({

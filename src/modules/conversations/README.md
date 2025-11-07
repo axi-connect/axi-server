@@ -103,7 +103,6 @@ POST /channels/messages
 ### Tiempo real (WebSocket)
 - Namespace: `/message` (exportado por `channels/infrastructure/handlers/index.ts`)
 - Eventos principales:
-  - `send_message` → emite mensaje vía `ChannelRuntimeService` si el socket está unido al cuarto `channel_<channelId>`
   - `message_sent` → confirmación al emisor
   - `message_received` → difusión a integrantes del canal
 - Validaciones de runtime: canal activo, unión al room, payload mínimo.

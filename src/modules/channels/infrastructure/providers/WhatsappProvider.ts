@@ -1,8 +1,9 @@
 import pkg from 'whatsapp-web.js';
 import { type Message } from 'whatsapp-web.js';
-import { ChannelProvider, ContactType } from '@prisma/client';
+import { ChannelProvider, ContactType, MessageDirection } from '@prisma/client';
+import { MessageInput } from '@/modules/conversations/domain/entities/message.js';
 import { AuthSessionService } from '../../application/services/auth-session.service.js';
-import { BaseProvider, ProviderConfig, MessagePayload, ProviderResponse, WebhookMessage } from './BaseProvider.js';
+import { BaseProvider, ProviderConfig, ProviderResponse, WebhookMessage } from './BaseProvider.js';
 
 const { Client, LocalAuth } = pkg;
 
@@ -152,6 +153,7 @@ export class WhatsappProvider extends BaseProvider {
               channel_id: this.channelId,
               content_type: message.type,
               provider_message_id: message.id.id,
+              direction: message.fromMe ? MessageDirection.outgoing : MessageDirection.incoming
             },
           });
         }, 1000); // 1 second debounce
@@ -162,14 +164,41 @@ export class WhatsappProvider extends BaseProvider {
       }
     });
 
+    // Manejar mensajes salientes desde el dispositivo
+    this.client.on('message_create', async (message: Message) => {
+      try {
+        if (message.fromMe && this.messageHandler){
+          await this.messageHandler({
+            contact: {
+              name: '',
+              meta: {},
+              id: message.to,
+              number: message.to,
+              profile_pic_url: '',
+              type: ContactType.prospect,
+              company_id: this.config.company_id,
+            },
+            message: {
+              metadata: {},
+              to: message.to,
+              from: message.from,
+              conversation_id: '',
+              message: message.body,
+              channel_id: this.channelId,
+              content_type: message.type,
+              provider_message_id: message.id.id,
+              direction: MessageDirection.outgoing
+            },
+          });
+        }
+      } catch (error) {
+        console.error('Error processing WhatsApp message:', error);
+      }
+    });
+
     this.client.on('ready', async () => {
       console.log(`🚀 WhatsApp listo para canal ${this.channelId}`);
-      // this.authenticated = true;
-      // this.config.emitEventCallback({
-      //   event: 'channel.ready',
-      //   channelId: this.channelId,
-      //   companyId: this.config.company_id,
-      // });
+      await this.handlerAuthenticated('ready');
     });
 
     process.on('unhandledRejection', (error: any) => {
@@ -181,36 +210,15 @@ export class WhatsappProvider extends BaseProvider {
     });
   }
 
-  async sendMessage(payload: MessagePayload): Promise<ProviderResponse> {
+  async sendMessage(payload: MessageInput): Promise<ProviderResponse> {
     try {
       await this.ensureClient();
 
-      if (!this.client || !this.authenticated) {
+      if (!this.client || !this.authenticated || !this.client.info?.wid?.user) {
         return {
           success: false,
           error: 'WhatsApp client not authenticated or disconnected'
         };
-      }
-
-      // Verificar si el cliente está realmente conectado
-      if (!this.client.info?.wid?.user) {
-        // Intentar reconectar si es posible
-        try {
-          await this.ensureClient();
-          // await new Promise(resolve => setTimeout(resolve, 2000)); // Esperar inicialización
-
-          if (!this.client.info?.wid?.user) {
-            return {
-              success: false,
-              error: 'WhatsApp client disconnected from device'
-            };
-          }
-        } catch (reconnectError) {
-          return {
-            success: false,
-            error: 'Failed to reconnect WhatsApp client'
-          };
-        }
       }
 
       const message = await this.client.sendMessage(payload.to, payload.message);
@@ -305,15 +313,7 @@ export class WhatsappProvider extends BaseProvider {
 
         this.client!.once('authenticated', async () => {
           console.log(`✅ WhatsApp autenticado para canal ${this.channelId}`);
-          this.authenticated = true;
-          this.config.emitEventCallback({
-            event: 'channel.authenticated',
-            channelId: this.channelId,
-            companyId: this.config.company_id,
-            data: { reason: 'authenticated' },
-            timestamp: new Date()
-          });
-          await this.authSessionService.completeSession(this.channelId, { reason: 'authenticated' });
+          await this.handlerAuthenticated('authenticated');
           cleanup();
           resolve('');
         });
@@ -339,6 +339,18 @@ export class WhatsappProvider extends BaseProvider {
       console.error(`Error en generateQR para canal ${this.channelId}:`, error);
       throw error;
     }
+  }
+
+  private async handlerAuthenticated(reason: string): Promise<void> {
+    this.authenticated = true;
+    this.config.emitEventCallback({
+      data: { reason },
+      timestamp: new Date(),
+      channelId: this.channelId,
+      event: 'channel.authenticated',
+      companyId: this.config.company_id,
+    });
+    await this.authSessionService.completeSession(this.channelId, { reason });
   }
 
   /**
