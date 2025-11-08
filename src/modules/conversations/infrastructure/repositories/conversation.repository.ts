@@ -105,9 +105,11 @@ export class ConversationRepository implements ConversationRepositoryInterface {
       where: { id },
       data: {
         status: data.status,
-        assigned_agent_id: data.assigned_agent_id,
         contact_meta: data.contact_meta,
+        intention_id: data.intention_id,
+        workflow_state: data.workflow_state,
         last_message_at: data.last_message_at,
+        assigned_agent_id: data.assigned_agent_id,
         updated_at: new Date()
       }
     });
@@ -198,6 +200,8 @@ export class ConversationRepository implements ConversationRepositoryInterface {
       contact_meta: conversation.contact_meta,
       last_message_at: conversation.last_message_at,
       assigned_agent_id: conversation.assigned_agent_id,
+      intention_id: conversation.intention_id ?? undefined,
+      workflow_state: conversation.workflow_state ?? undefined,
     };
   }
 }

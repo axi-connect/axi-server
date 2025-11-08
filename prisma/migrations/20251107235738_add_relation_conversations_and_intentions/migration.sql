@@ -17,7 +17,7 @@ CREATE TYPE "business"."DocumentType" AS ENUM ('cc', 'ce', 'ti', 'pp', 'nit');
 CREATE TYPE "business"."LeadStatus" AS ENUM ('Hot', 'Warm', 'Cold', 'New', 'Contacted', 'Converted');
 
 -- CreateEnum
-CREATE TYPE "channels"."ChannelProvider" AS ENUM ('META', 'TWILIO', 'CUSTOM');
+CREATE TYPE "channels"."ChannelProvider" AS ENUM ('TWILIO', 'CUSTOM', 'META', 'DEFAULT');
 
 -- CreateEnum
 CREATE TYPE "channels"."AgentStatus" AS ENUM ('available', 'busy', 'away', 'offline', 'training', 'meeting', 'on_break');
@@ -186,9 +186,11 @@ CREATE TABLE "channels"."conversation" (
     "channel_id" TEXT NOT NULL,
     "external_id" TEXT NOT NULL,
     "assigned_agent_id" INTEGER,
-    "participant_id" TEXT,
-    "participant_meta" JSONB,
-    "participant_type" "channels"."ContactType" NOT NULL,
+    "contact_id" TEXT,
+    "contact_meta" JSONB,
+    "contact_type" "channels"."ContactType" NOT NULL,
+    "intention_id" INTEGER,
+    "workflow_state" JSONB,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "last_message_at" TIMESTAMP(3),
@@ -203,8 +205,7 @@ CREATE TABLE "channels"."channel" (
     "type" "channels"."ChannelType" NOT NULL,
     "config" JSONB,
     "provider" "channels"."ChannelProvider" NOT NULL,
-    "is_active" BOOLEAN NOT NULL DEFAULT true,
-    "credentials_id" TEXT NOT NULL,
+    "credentials_id" TEXT,
     "provider_account" TEXT NOT NULL,
     "default_agent_id" INTEGER,
     "company_id" INTEGER NOT NULL,
@@ -299,8 +300,8 @@ CREATE TABLE "parameters"."intention" (
     "flow_name" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "ai_instructions" TEXT NOT NULL,
-    "priority" "parameters"."IntentionPriority" NOT NULL,
     "type" "parameters"."IntentionType" NOT NULL,
+    "priority" "parameters"."IntentionPriority" NOT NULL,
 
     CONSTRAINT "intention_pkey" PRIMARY KEY ("id")
 );
@@ -494,7 +495,13 @@ CREATE INDEX "idx_conversation_company" ON "channels"."conversation"("company_id
 CREATE INDEX "idx_conversation_channel" ON "channels"."conversation"("channel_id");
 
 -- CreateIndex
-CREATE INDEX "idx_conversation_participant" ON "channels"."conversation"("participant_id");
+CREATE INDEX "idx_conversation_contact" ON "channels"."conversation"("contact_id");
+
+-- CreateIndex
+CREATE INDEX "idx_conversation_intention" ON "channels"."conversation"("intention_id");
+
+-- CreateIndex
+CREATE INDEX "idx_conversation_agent_updated" ON "channels"."conversation"("assigned_agent_id", "updated_at");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "channel_credentials_id_key" ON "channels"."channel"("credentials_id");
@@ -584,10 +591,13 @@ ALTER TABLE "channels"."conversation" ADD CONSTRAINT "conversation_channel_id_fk
 ALTER TABLE "channels"."conversation" ADD CONSTRAINT "conversation_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
+ALTER TABLE "channels"."conversation" ADD CONSTRAINT "conversation_intention_id_fkey" FOREIGN KEY ("intention_id") REFERENCES "parameters"."intention"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "channels"."channel" ADD CONSTRAINT "channel_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "rbac"."company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "channels"."channel" ADD CONSTRAINT "channel_credentials_id_fkey" FOREIGN KEY ("credentials_id") REFERENCES "channels"."channel_credential"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "channels"."channel" ADD CONSTRAINT "channel_credentials_id_fkey" FOREIGN KEY ("credentials_id") REFERENCES "channels"."channel_credential"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "channels"."message_attachment" ADD CONSTRAINT "message_attachment_message_id_fkey" FOREIGN KEY ("message_id") REFERENCES "channels"."message_log"("id") ON DELETE CASCADE ON UPDATE CASCADE;

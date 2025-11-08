@@ -23,9 +23,10 @@ model Intention {
   flow_name       String
   description     String
   ai_instructions String
+  type            IntentionType
+  conversations   Conversation[]
   agentIntention  AgentIntention[]
   priority        IntentionPriority
-  type            IntentionType
 
   @@map("intention")
   @@schema("parameters")

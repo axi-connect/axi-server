@@ -39,12 +39,14 @@ export interface ConversationEntity {
   updated_at: Date;
   company_id: number;
   channel_id: string;
-  external_id: string;
   contact_meta?: any;
-  last_message_at?: Date;
+  external_id: string;
   contact_id?: string;
-  assigned_agent_id?: number;
+  intention_id?: number;
+  last_message_at?: Date;
+  workflow_state?: unknown;
   contact_type: ContactType;
+  assigned_agent_id?: number;
 }
 
 export interface CreateConversationData {
@@ -52,9 +54,11 @@ export interface CreateConversationData {
   channel_id: string;
   external_id: string;
   contact_id?: string;
-  assigned_agent_id?: number;
+  intention_id?: number;
   contact_type: ContactType;
+  assigned_agent_id?: number;
   contact_meta?: InputJsonValue | undefined;
+  workflow_state?: InputJsonValue | undefined;
 }
 
 export interface UpdateConversationData {
@@ -62,4 +66,6 @@ export interface UpdateConversationData {
   assigned_agent_id?: number;
   contact_meta?: any;
   last_message_at?: Date;
+  intention_id?: number;
+  workflow_state?: InputJsonValue | undefined;
 }

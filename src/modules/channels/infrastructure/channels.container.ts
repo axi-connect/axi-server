@@ -15,6 +15,8 @@ import { MessageRepository } from '@/modules/conversations/infrastructure/reposi
 import { MessageIngestionService } from '@/modules/conversations/application/services/message-ingestion.service.js';
 import { ConversationResolver } from '@/modules/conversations/application/services/conversation-resolver.service.js';
 import { ConversationRepository } from '@/modules/conversations/infrastructure/repositories/conversation.repository.js';
+import { IntentionClassifierService } from '@/modules/conversations/application/services/intention-classifier.service.js';
+import { ParametersRepository } from '@/modules/parameters/infrastructure/parameters.repository.js';
 
 // Use Cases
 import { ChannelUseCases } from '../application/use-cases/channel.usecases.js';
@@ -91,10 +93,20 @@ export class ChannelsContainer {
             { idempotencyTtlSeconds: 15 * 60, maxMetadataBytes: 32 * 1024 } // 15 minutes, 32KB
         );
 
+        // Intention classifier (Redis cache + AI fallback)
+        const parametersRepository = new ParametersRepository();
+        const intentionClassifier = new IntentionClassifierService(
+            messageRepository,
+            parametersRepository,
+            { maxHistory: 15, cacheTtlSeconds: 5 * 60, aiTimeoutMs: 9500 } // 9.5 seconds
+        );
+
         const messageRouting = new MessageRoutingService(
             messageIngestion,
             conversationResolver,
-            (event) => this.webSocketGateway.handleWebSocketEvent(event)
+            (event) => this.webSocketGateway.handleWebSocketEvent(event),
+            conversationRepository,
+            intentionClassifier
         );
           
         this.runtimeService.setMessageRouterService(messageRouting);

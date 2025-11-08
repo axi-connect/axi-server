@@ -1,3 +1,6 @@
+/**
+ * Generar código aleatorio de 5 caracteres (ABC12)
+*/
 export function generateCode():string{
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const randomLetters = [...Array(3)]

@@ -115,19 +115,22 @@ model MessageLog {
 model Conversation {
   id                String          @id @default(uuid())
   status            String          @default("open") // open/closed
-  company_id        Int // FK to Company
-  channel_id        String // FK to Channel
+  company_id        Int             // FK to Company
+  channel_id        String          // FK to Channel
   external_id       String          @unique // external conversation id from provider (wa session id, etc.)
-  assigned_agent_id Int? // current assigned agent
-  contact_id        String? // phone or user id on the channel (e.g. customer phone number)
-  contact_meta      Json? // any metadata (profile name, locale)
-  contact_type      ContactType // agent | lead | client | prospect | customer | system
+  assigned_agent_id Int?            // current assigned agent
+  contact_id        String?         // phone or user id on the channel (e.g. customer phone number)
+  contact_meta      Json?           // any metadata (profile name, locale)
+  contact_type      ContactType     // agent | lead | client | prospect | customer | system
+  intention_id      Int?            // FK to parameters.Intention
+  workflow_state    Json?           // serialized workflow state machine per conversation
   created_at        DateTime        @default(now()) // date of creation
   updated_at        DateTime        @updatedAt // date of last update
-  last_message_at   DateTime? // date of last message
+  last_message_at   DateTime?       // date of last message
   assigned_agent    Agent?          @relation(fields: [assigned_agent_id], references: [id])
   channel           Channel         @relation(fields: [channel_id], references: [id], onDelete: Cascade)
   company           Company         @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  intention         Intention?      @relation(fields: [intention_id], references: [id])
   messages          MessageLog[]
   // client             Client?            @relation(fields: [client_id], references: [id])
   // lead               Lead?              @relation(fields: [lead_id], references: [id])
@@ -136,6 +139,8 @@ model Conversation {
   @@index([company_id], map: "idx_conversation_company")
   @@index([channel_id], map: "idx_conversation_channel")
   @@index([contact_id], map: "idx_conversation_contact")
+  @@index([intention_id], map: "idx_conversation_intention")
+  @@index([assigned_agent_id, updated_at], map: "idx_conversation_agent_updated")
   @@map("conversation")
   @@schema("channels")
 }

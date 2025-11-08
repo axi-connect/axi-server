@@ -57,8 +57,9 @@ export type ChannelEvents =
   | 'channel.authenticated';
 
 export type MessageEvents =
+  | 'message.sent'
   | 'message.received'
-  | 'message.sent';
+  | 'intent.detected';
 
 export type SystemEvents = never; // Reservado para futuros eventos del sistema
 
@@ -72,6 +73,7 @@ export interface WebSocketEventDataMap {
   'channel.authenticated': { reason: string };
   'message.received': MessageEntity; // Mensaje persistido/ingestado
   'message.sent': { messageId: string; result?: unknown } | MessageEntity;
+  'intent.detected': { conversation_id: string; intention_id: number; code: string; confidence: number };
 }
 
 export interface WebSocketEvent<T extends WebSocketEventName = WebSocketEventName> {

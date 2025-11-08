@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { ChatCompletionMessageParam } from "openai/resources/chat/completions.mjs";
 
-export class AiService{
+export class AIService{
     private openai:OpenAI;
 
     constructor(

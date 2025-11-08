@@ -4,12 +4,16 @@ import { ConversationResolver } from './conversation-resolver.service.js';
 import { MessageEntity, MessageInput } from '../../domain/entities/message.js';
 import { WebSocketEvent } from '@/modules/channels/domain/entities/channel.js';
 import { MessageHandlerData } from '@/modules/channels/infrastructure/providers/BaseProvider.js';
+import { ConversationRepositoryInterface } from '../../domain/repositories/conversation-repository.interface.js';
+import { IntentionClassifierService } from './intention-classifier.service.js';
 
 export class MessageRoutingService {
     constructor(
         private messageIngestion: MessageIngestionService,
         private conversationResolver: ConversationResolver,
-        private emitWebSocketEvent: (event: WebSocketEvent) => void
+        private emitWebSocketEvent: (event: WebSocketEvent) => void,
+        private conversationRepository?: ConversationRepositoryInterface,
+        private intentionClassifier?: IntentionClassifierService
     ) {}
 
     public async messageRouter(channelId: string, { message, contact }: MessageHandlerData): Promise<void> {
@@ -33,6 +37,30 @@ export class MessageRoutingService {
     public async handleIncomingMessage(channelId: string, { message, contact }: MessageHandlerData): Promise<MessageEntity> {
         try {
             const savedMessage = await this.messageIngestion.ingest(message);
+
+            // Clasificar intención si no existe aún (con cache y fallback IA)
+            if (this.conversationRepository && this.intentionClassifier) {
+                const conversation = await this.conversationRepository.findById(message.conversation_id);
+                if (conversation && !conversation.intention_id) {
+                    const choice = await this.intentionClassifier.classifyConversation(conversation.id);
+                    if (choice) {
+                        await this.conversationRepository.update(conversation.id, { intention_id: choice.intentionId });
+                        // Emitir evento de intención detectada
+                        this.emitWebSocketEvent({
+                            channelId,
+                            event: 'intent.detected',
+                            companyId: contact.company_id,
+                            timestamp: new Date(),
+                            data: {
+                                conversation_id: conversation.id,
+                                intention_id: choice.intentionId,
+                                code: choice.code,
+                                confidence: choice.confidence
+                            }
+                        } as WebSocketEvent<'intent.detected'>);
+                    }
+                }
+            }
 
             // Emitir evento WebSocket
             this.emitWebSocketEvent({
