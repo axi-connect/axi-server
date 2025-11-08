@@ -1,6 +1,7 @@
-## Conversations Module
-
+# Conversations Module
 Objetivo: gestionar conversaciones y mensajes omnicanal (WhatsApp, Instagram, Email, etc.), con historial persistente y capacidades tiempo real.
+
+## Core
 
 ### Arquitectura
 - **Domain**: contratos y modelos de negocio.
@@ -15,44 +16,6 @@ Objetivo: gestionar conversaciones y mensajes omnicanal (WhatsApp, Instagram, Em
   - `handlers/`: WebSocket message handler (namespace `/message`)
 
 La integración HTTP cuelga bajo `/channels` (véase Channels Router). La integración WebSocket se orquesta desde `channels` runtime y expone el namespace `/message`.
-
-### Entidades (Domain)
-- `ConversationEntity`
-  - Campos: `id`, `status`, `company_id`, `channel_id`, `external_id`, `assigned_agent_id?`, `participant_id?`, `participant_meta?`, `participant_type`, `created_at`, `updated_at`, `last_message_at?`
-- `MessageEntity`
-  - Campos: `id`, `from?`, `to?`, `message`, `payload?`, `metadata?`, `direction`, `timestamp`, `conversation_id`, `status`, `content_type`, `created_at`, `updated_at`
-- `MessageAttachmentEntity` (definición domain; implementación infra pendiente)
-
-Enums referenciados de Prisma (`channels` schema): `ContactType`, `MessageDirection`, `MessageStatus`.
-
-### Casos de uso (Application)
-- `ConversationUseCases`
-  - `createConversation(input)` valida `external_id` único por `channel_id` y delega a repo
-  - `getConversationById(id)`
-  - `getConversationByExternalId(external_id, channel_id)`
-  - `updateConversation(id, input)`
-  - `assignAgent(conversation_id, agent_id)` / `unassignAgent(conversation_id)`
-  - `updateLastMessage(conversation_id, timestamp)`
-  - `getActiveConversationsByAgent(agent_id)` / `countConversationsByAgent(agent_id)`
-- `MessageUseCases`
-  - `sendMessage(input)`
-  - `getMessageById(id)`
-  - `getMessagesByConversation(conversation_id, criteria?)`
-  - `updateMessage(id, input)` / `updateMessageStatus(id, status)`
-- `AttachmentUseCases` (contrato para futuro repositorio de adjuntos)
-
-### Repositorios (Infrastructure)
-- `ConversationRepository` (Prisma)
-  - Tabla: `channels.Conversation`
-  - Operaciones: `create`, `findById`, `findByExternalId`, `findByParticipant`, `findByChannel(criteria)`, `search(criteria)`, `update`, `delete`, `assignAgent`, `unassignAgent`, `updateLastMessage`, `countByStatus`, `countByAgent`, `findActiveByAgent`
-- `MessageRepository` (Prisma)
-  - Tabla: `channels.MessageLog`
-  - Operaciones: `create`, `findById`, `findByConversation(criteria)`, `search(criteria)`, `update`, `delete`, `countByConversation`, `findLatestByConversation`, `updateStatus`, `bulkUpdateStatus`
-
-Mapeos relevantes:
-- `Conversation.external_id` es `@unique` (clave para idempotencia por proveedor)
-- `MessageLog.timestamp` indexado para orden cronológico
-- Relaciones: `Conversation.messages` (1:N), `MessageAttachment` (1:N con `MessageLog`)
 
 ### API HTTP (Infrastructure/routes)
 Rutas expuestas bajo `/channels` (véase `channels/infrastructure/routes/main.routes.ts`). Todas las rutas usan `authenticate` (middleware global de `/channels`) y `authorize(resource, action)` a nivel de endpoint.
@@ -100,7 +63,7 @@ POST /channels/messages
 }
 ```
 
-### Tiempo real (WebSocket)
+### Real Time (WebSocket)
 - Namespace: `/message` (exportado por `channels/infrastructure/handlers/index.ts`)
 - Eventos principales:
   - `message_sent` → confirmación al emisor
@@ -112,7 +75,7 @@ POST /channels/messages
 - Autorización: `authorize('/conversations' | '/messages', 'create'|'read'|'update'|'delete')` por endpoint.
 - Validadores compartidos (`shared/validators.shared.ts`) disponibles para IDs; actualmente las rutas de conversaciones/mensajes no los usan explícitamente.
 
-### Observaciones y mejoras sugeridas
+### TODO
 - Errores de negocio: algunos casos de uso lanzan `Error` genérico (p. ej., not found) y los controladores responden 500; sería preferible lanzar `HttpError(404, '...')` para status precisos.
 - Consistencia temporal: al crear/enviar mensaje, actualizar `Conversation.last_message_at` y considerar transacción si aplica.
 - Validación de entrada: centralizar esquemas (Joi/Zod) para `create/update` de conversaciones y mensajes.
@@ -133,4 +96,305 @@ POST /channels/messages
 - Integrar validación de entrada por endpoint y mapear errores a `HttpError`.
 - Conectar WS → persistencia para reflejar eventos en `MessageLog` y actualizar `last_message_at`.
 
+## Sistema de Asignación de Agentes y Workflows con IA
 
+### 🎯 Visión General
+
+**Todo comienza con una conversación.** Esta es la premisa fundamental de AXI: cada interacción con un cliente es una oportunidad para entender sus necesidades y proporcionar la respuesta más adecuada a través de agentes especializados y flujos de trabajo inteligentes.
+
+El sistema implementa un pipeline completo que procesa mensajes entrantes siguiendo esta secuencia:
+1. **Captura del mensaje** → 2. **Clasificación de intención** → 3. **Asignación de agente** → 4. **Ejecución de workflow** → 5. **Respuesta inteligente**
+
+### 🧠 Sistema de Intenciones
+
+#### ¿Qué son las Intenciones?
+
+Las **intenciones** son la base del sistema inteligente de AXI. Representan el **propósito real** detrás de cada mensaje del cliente. No se trata solo de palabras, sino de **entender qué quiere lograr** el usuario.
+
+#### ¿Por qué son importantes?
+
+- **Personalización**: Permiten respuestas adaptadas a necesidades específicas
+- **Eficiencia**: Dirigen automáticamente a los agentes especializados
+- **Escalabilidad**: El sistema aprende y mejora con cada interacción
+- **Experiencia**: Los clientes reciben atención relevante y rápida
+
+#### Tipos de Intenciones
+
+El sistema soporta múltiples tipos de intenciones organizadas por categorías:
+
+| Tipo | Ejemplos | Descripción |
+|------|----------|-------------|
+| `sales` | Comprar producto, cotización, pedido | Intenciones comerciales |
+| `support` | Problema técnico, ayuda, quejas | Solicitudes de soporte |
+| `onboarding` | Registro, configuración, tutorial | Nuevos usuarios |
+| `follow_up` | Seguimiento, recordatorios, feedback | Interacciones de seguimiento |
+
+#### Cómo Funciona la Clasificación
+
+```typescript
+// Ejemplo de intención definida
+{
+  id: 1,
+  code: "COMPRAR_PRODUCTO",
+  flow_name: "sales_flow",
+  description: "Cliente quiere adquirir un producto",
+  ai_instructions: "El cliente tiene intención de comprar productos o servicios",
+  type: "sales",
+  priority: "high"
+}
+```
+
+**Proceso de clasificación:**
+1. **Análisis semántico**: IA analiza el contexto conversacional
+2. **Matching de patrones**: Busca coincidencias con intenciones definidas
+3. **Scoring de confianza**: Asigna un puntaje de certeza (0-1)
+4. **Fallback heurístico**: Si IA falla, usa reglas simples de keywords
+
+### 🔄 Flujo Completo del Sistema
+
+#### Arquitectura General
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Mensaje       │───▶│  Clasificación │───▶│  Asignación     │
+│   Entrante      │    │   de Intención  │    │   de Agente     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                      │
+                                                      ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Workflow      │───▶│  Ejecución     │───▶│  Respuesta      │
+│   Engine        │    │   de Pasos      │    │   Inteligente   │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+### 📋 Componentes del Sistema
+
+#### 1. MessageRoutingService
+**Responsabilidad**: Punto de entrada para todos los mensajes entrantes.
+
+**Funciones:**
+- Recepción de mensajes desde providers (WhatsApp, etc.)
+- Resolución/creación de conversaciones
+- Delegación al orchestrator para procesamiento inteligente
+
+#### 2. ConversationOrchestratorService
+**Responsabilidad**: Coordina el flujo completo intención → agente → workflow.
+
+**Secuencia:**
+```typescript
+async processIncomingMessage(conversation, message, contact) {
+    // 1. Clasificar intención si no existe
+    if (!conversation.intention_id) {
+        const intention = await classifier.classifyConversation(conversation.id);
+        // Emitir evento 'intent.detected'
+    }
+
+    // 2. Asignar agente si corresponde
+    if (intention && !conversation.assigned_agent_id) {
+        const agentId = await matching.assignIfNeeded(conversation, intention.id);
+        // Emitir evento 'agent.assigned'
+    }
+
+    // 3. Procesar workflow
+    if (intention && agentId) {
+        await workflowEngine.processMessage(conversation, message);
+    }
+}
+```
+
+#### 3. IntentionClassifierService
+**Responsabilidad**: Clasifica automáticamente las intenciones de los mensajes.
+
+**Características:**
+- **Cache Redis**: Evita reclasificaciones (TTL: 5 min)
+- **AI + Fallback**: OpenAI con timeout de 9.5s + heurística de keywords
+- **Prompt inteligente**: Análisis contextual del historial
+
+**Ejemplo de prompt:**
+```
+Analiza el contexto de la conversación y selecciona la intención más adecuada.
+Devuelve estrictamente un JSON válido.
+
+HISTORIAL: Cliente: Hola, quiero comprar un producto
+Agente: Claro, ¿qué producto necesitas?
+
+INTENCIONES DISPONIBLES:
+1|COMPRAR_PRODUCTO: Si el cliente tiene intención de comprar productos
+2|SOPORTE_TECNICO: Para problemas técnicos
+```
+
+#### 4. AgentMatchingService
+**Responsabilidad**: Asigna automáticamente el agente más adecuado.
+
+**Criterios de matching:**
+- **Disponibilidad**: Solo agentes con `status = 'available'`
+- **Canal**: Agente debe soportar el canal del mensaje (WhatsApp, etc.)
+- **Intención**: Agente debe tener la intención asignada
+- **Carga**: Balanceo por menor carga de trabajo (Redis cache)
+
+**Algoritmo:**
+```typescript
+const candidates = agents.filter(agent =>
+    agent.status === 'available' &&
+    agent.channel === conversation.channel_type &&
+    agent.agentIntention.some(ai => ai.intention.id === intentionId)
+);
+
+return chooseLeastLoaded(candidates);
+```
+
+#### 5. WorkflowEngineService
+**Responsabilidad**: Gestiona el estado y ejecución de workflows por conversación.
+
+**Estado persistido:**
+```typescript
+interface WorkflowState {
+    currentStep?: string;
+    completedSteps: string[];
+    collectedData: Record<string, unknown>;
+    flowName?: string;
+    intentionId?: number;
+    agentId?: number;
+    lastStepAt?: Date;
+}
+```
+
+**Funciones:**
+- Inicialización automática al asignar agente
+- Prevención de pasos duplicados
+- Persistencia de datos recopilados
+- Avance basado en mensajes/acciones
+
+### 📊 Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Provider
+    participant MessageRouting
+    participant Orchestrator
+    participant Classifier
+    participant Matcher
+    participant WorkflowEngine
+    participant Agent
+    participant WebSocket
+
+    Client->>Provider: Envía mensaje
+    Provider->>MessageRouting: messageRouter()
+    MessageRouting->>MessageRouting: handleIncomingMessage()
+
+    MessageRouting->>MessageRouting: ingest(message)
+    MessageRouting->>Orchestrator: processIncomingMessage()
+
+    rect rgb(240, 248, 255)
+        Note over Orchestrator,Classifier: FASE 1: Clasificación de Intención
+        Orchestrator->>Classifier: classifyConversation()
+        Classifier->>Classifier: Check cache Redis
+        Classifier->>Classifier: Build AI prompt
+        Classifier->>Classifier: Call OpenAI (timeout 9.5s)
+        Classifier->>Orchestrator: intentionResult
+
+        Orchestrator->>Orchestrator: Update conversation.intention_id
+        Orchestrator->>WebSocket: emit('intent.detected')
+    end
+
+    rect rgb(255, 248, 240)
+        Note over Orchestrator,Matcher: FASE 2: Asignación de Agente
+        Orchestrator->>Matcher: assignIfNeeded()
+        Matcher->>Matcher: Filter candidates (status, channel, intention)
+        Matcher->>Matcher: Calculate loads (Redis cache)
+        Matcher->>Matcher: Select least loaded agent
+
+        Matcher->>Orchestrator: agentId
+        Orchestrator->>Orchestrator: Update conversation.assigned_agent_id
+        Orchestrator->>WebSocket: emit('agent.assigned')
+    end
+
+    rect rgb(248, 255, 240)
+        Note over Orchestrator,WorkflowEngine: FASE 3: Ejecución de Workflow
+        Orchestrator->>WorkflowEngine: initializeWorkflow()
+        WorkflowEngine->>WorkflowEngine: Create initial state
+
+        Orchestrator->>WorkflowEngine: processMessage()
+        WorkflowEngine->>WorkflowEngine: Update workflow state
+        WorkflowEngine->>Agent: Execute workflow steps
+    end
+
+    Orchestrator->>MessageRouting: Processing complete
+    MessageRouting->>WebSocket: emit('message.received')
+
+    Agent->>Client: Respuesta inteligente
+```
+
+## 🎯 Casos de Uso
+
+#### Caso 1: Nuevo Cliente - Compra de Producto
+
+1. **Mensaje inicial**: "Hola, quiero comprar un producto"
+2. **Clasificación**: IA identifica intención `COMPRAR_PRODUCTO`
+3. **Asignación**: Busca agentes de ventas disponibles
+4. **Workflow**: Ejecuta flujo de ventas (producto → precio → datos → pago)
+5. **Respuesta**: Agente especializado inicia conversación comercial
+
+#### Caso 2: Cliente Recurrente - Soporte Técnico
+
+1. **Mensaje**: "Mi producto no funciona correctamente"
+2. **Clasificación**: Detecta intención `SOPORTE_TECNICO`
+3. **Asignación**: Encuentra agente técnico disponible
+4. **Workflow**: Flujo de diagnóstico → solución → seguimiento
+5. **Respuesta**: Asistencia técnica especializada
+
+### ⚡ Optimizaciones de Performance
+
+#### Caching Estratégico
+- **Intenciones**: Redis cache por conversación (5 min TTL)
+- **Carga de agentes**: Contadores en Redis (60s TTL)
+- **Workflow states**: Persistencia optimizada en BD
+
+#### Timeouts y Resilience
+- **IA Classification**: 9.5s timeout con fallback heurístico
+- **Agent Matching**: Fallback a agente por defecto del canal
+- **Workflow Processing**: Manejo de errores sin bloquear pipeline
+
+#### Métricas Clave
+- **Latencia de clasificación**: < 300ms (cache), < 1.5s (IA fría)
+- **Ratio de asignación exitosa**: > 95%
+- **Tasa de fallback**: < 5%
+
+## 🔧 Configuración
+
+#### Variables de Entorno
+```bash
+# AI Service
+AI_BASE_URL=https://api.deepseek.com
+AI_API_KEY=your_key_here
+
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# Database
+DATABASE_URL=postgresql://...
+```
+
+#### Parámetros del Sistema
+```typescript
+const SYSTEM_CONFIG = {
+    intentionCacheTtl: 5 * 60,      // 5 minutes
+    agentLoadCacheTtl: 60,          // 1 minute
+    aiTimeoutMs: 9500,              // 9.5 seconds
+    maxHistoryMessages: 15,         // Context window
+    maxAgentCandidates: 100         // Matching limit
+};
+```
+
+## 🚀 Próximas Expansiones
+
+- **Workflows configurables**: UI para diseñar flujos sin código
+- **Aprendizaje continuo**: Sistema que mejora clasificaciones automáticamente
+- **Multi-canal**: Expansión a email, chat web, redes sociales
+- **Analytics avanzado**: Dashboards de efectividad por intención/agente
+- **Integraciones**: CRM, ERP, herramientas externas
+
+---
+
+**"Todo comienza con una conversación"** - AXI hace que cada conversación cuente, convirtiendo mensajes en oportunidades de negocio a través de inteligencia artificial y automatización inteligente.

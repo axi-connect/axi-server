@@ -25,6 +25,7 @@ import { ChannelUseCases } from '../application/use-cases/channel.usecases.js';
 import { ChannelAuthUseCases } from '../application/use-cases/channel-auth.usecases.js';
 import { MessageRoutingService } from '@/modules/conversations/application/services/message-routing.service.js';
 import { WorkflowEngineService } from '@/modules/conversations/application/services/workflow-engine.service.js';
+import { ConversationOrchestratorService } from '@/modules/conversations/application/services/conversation-orchestrator.service.js';
 
 /**
  * Contenedor de dependencias centralizado para el módulo Channels
@@ -123,14 +124,20 @@ export class ChannelsContainer {
             { cacheTtlSeconds: 5 * 60 }
         );
 
+        // Conversation orchestrator (coordinates intent → agent → workflow)
+        const conversationOrchestrator = new ConversationOrchestratorService(
+            agentMatching,
+            workflowEngine,
+            intentionClassifier,
+            (event) => this.webSocketGateway.handleWebSocketEvent(event),
+            conversationRepository
+        );
+
         const messageRouting = new MessageRoutingService(
             messageIngestion,
             conversationResolver,
             (event) => this.webSocketGateway.handleWebSocketEvent(event),
-            conversationRepository,
-            intentionClassifier,
-            agentMatching,
-            workflowEngine
+            conversationOrchestrator
         );
           
         this.runtimeService.setMessageRouterService(messageRouting);

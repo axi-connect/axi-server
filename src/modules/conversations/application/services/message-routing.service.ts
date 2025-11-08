@@ -1,23 +1,17 @@
 import { MessageDirection } from '@prisma/client';
-import { AgentMatchingService } from './agent-matching.service.js';
 import { MessageIngestionService } from './message-ingestion.service.js';
 import { ConversationResolver } from './conversation-resolver.service.js';
 import { MessageEntity, MessageInput } from '../../domain/entities/message.js';
 import { WebSocketEvent } from '@/modules/channels/domain/entities/channel.js';
-import { IntentionClassifierService } from './intention-classifier.service.js';
+import { ConversationOrchestratorService } from './conversation-orchestrator.service.js';
 import { MessageHandlerData } from '@/modules/channels/infrastructure/providers/BaseProvider.js';
-import { ConversationRepositoryInterface } from '../../domain/repositories/conversation-repository.interface.js';
-import { WorkflowEngineService } from './workflow-engine.service.js';
 
 export class MessageRoutingService {
     constructor(
         private messageIngestion: MessageIngestionService,
         private conversationResolver: ConversationResolver,
         private emitWebSocketEvent: (event: WebSocketEvent) => void,
-        private conversationRepository?: ConversationRepositoryInterface,
-        private intentionClassifier?: IntentionClassifierService,
-        private agentMatching?: AgentMatchingService,
-        private workflowEngine?: WorkflowEngineService
+        private conversationOrchestrator?: ConversationOrchestratorService
     ) {}
 
     public async messageRouter(channelId: string, { message, contact }: MessageHandlerData): Promise<void> {
@@ -42,61 +36,15 @@ export class MessageRoutingService {
         try {
             const savedMessage = await this.messageIngestion.ingest(message);
 
-            if (!this.conversationRepository || !this.intentionClassifier) throw new Error('ConversationRepository or IntentionClassifier not available');
-            const conversation = await this.conversationRepository.findById(message.conversation_id);
-            if (conversation) {
-                // Clasificar intención si no existe aún (con cache y fallback IA)
-                if (!conversation.intention_id){
-                    const choice = await this.intentionClassifier.classifyConversation(conversation.id);
-                    if (choice) {
-                        // Actualizar conversación con intención detectada
-                        conversation.intention_id = choice.intentionId;
-                        await this.conversationRepository.update(conversation.id, { intention_id: choice.intentionId });
-                        // Emitir evento de intención detectada
-                        this.emitWebSocketEvent({
-                            channelId,
-                            event: 'intent.detected',
-                            companyId: contact.company_id,
-                            timestamp: new Date(),
-                            data: {
-                                conversation_id: conversation.id,
-                                intention_id: choice.intentionId,
-                                code: choice.code,
-                                confidence: choice.confidence
-                            }
-                        } as WebSocketEvent<'intent.detected'>);
-                    }
-                }
-
-                // Auto-assignment (best-effort)
-                // Si tenemos una intención pero no tenemos un agente asignado, intentamos asignar uno
-                if (conversation.intention_id && !conversation.assigned_agent_id && this.agentMatching) {
-                    const assignedAgentId = await this.agentMatching.assignIfNeeded(conversation, conversation.intention_id);
-                    if (assignedAgentId) {
-                        // Actualizar conversación con agente asignado
-                        conversation.assigned_agent_id = assignedAgentId;
-                        // Emitir evento de agente asignado
-                        this.emitWebSocketEvent({
-                            channelId,
-                            timestamp: new Date(),
-                            event: 'agent.assigned',
-                            companyId: contact.company_id,
-                            data: {
-                                agent_id: assignedAgentId,
-                                conversation_id: conversation.id
-                            }
-                        } as WebSocketEvent<'agent.assigned'>);
-                    }
-                }
-
-                // Inicializar y procesar workflow si tenemos intención y agente
-                if (conversation.intention_id && conversation.assigned_agent_id && this.workflowEngine) {
-                    // Procesar mensaje para avanzar workflow
-                    await this.workflowEngine.processMessage(conversation, savedMessage);
+            // Coordinar intención → agente → workflow
+            if (this.conversationOrchestrator) {
+                const conversation = await this.conversationOrchestrator.conversationRepository.findById(message.conversation_id);
+                if (conversation) {
+                    await this.conversationOrchestrator.processIncomingMessage(conversation, savedMessage, contact);
                 }
             }
 
-            // Emitir evento WebSocket
+            // Emitir evento de mensaje recibido
             this.emitWebSocketEvent({
                 channelId,
                 data: savedMessage,
@@ -106,7 +54,6 @@ export class MessageRoutingService {
             });
 
             console.log(`📨 Mensaje recibido en canal ${channelId}`);
-
             return savedMessage;
         } catch (error) {
             console.error(`❌ Error procesando mensaje en canal ${channelId}:`, error);
