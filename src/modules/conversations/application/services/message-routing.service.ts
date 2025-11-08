@@ -7,6 +7,7 @@ import { WebSocketEvent } from '@/modules/channels/domain/entities/channel.js';
 import { IntentionClassifierService } from './intention-classifier.service.js';
 import { MessageHandlerData } from '@/modules/channels/infrastructure/providers/BaseProvider.js';
 import { ConversationRepositoryInterface } from '../../domain/repositories/conversation-repository.interface.js';
+import { WorkflowEngineService } from './workflow-engine.service.js';
 
 export class MessageRoutingService {
     constructor(
@@ -15,7 +16,8 @@ export class MessageRoutingService {
         private emitWebSocketEvent: (event: WebSocketEvent) => void,
         private conversationRepository?: ConversationRepositoryInterface,
         private intentionClassifier?: IntentionClassifierService,
-        private agentMatching?: AgentMatchingService
+        private agentMatching?: AgentMatchingService,
+        private workflowEngine?: WorkflowEngineService
     ) {}
 
     public async messageRouter(channelId: string, { message, contact }: MessageHandlerData): Promise<void> {
@@ -47,6 +49,7 @@ export class MessageRoutingService {
                 if (!conversation.intention_id){
                     const choice = await this.intentionClassifier.classifyConversation(conversation.id);
                     if (choice) {
+                        // Actualizar conversación con intención detectada
                         conversation.intention_id = choice.intentionId;
                         await this.conversationRepository.update(conversation.id, { intention_id: choice.intentionId });
                         // Emitir evento de intención detectada
@@ -70,6 +73,8 @@ export class MessageRoutingService {
                 if (conversation.intention_id && !conversation.assigned_agent_id && this.agentMatching) {
                     const assignedAgentId = await this.agentMatching.assignIfNeeded(conversation, conversation.intention_id);
                     if (assignedAgentId) {
+                        // Actualizar conversación con agente asignado
+                        conversation.assigned_agent_id = assignedAgentId;
                         // Emitir evento de agente asignado
                         this.emitWebSocketEvent({
                             channelId,
@@ -82,6 +87,12 @@ export class MessageRoutingService {
                             }
                         } as WebSocketEvent<'agent.assigned'>);
                     }
+                }
+
+                // Inicializar y procesar workflow si tenemos intención y agente
+                if (conversation.intention_id && conversation.assigned_agent_id && this.workflowEngine) {
+                    // Procesar mensaje para avanzar workflow
+                    await this.workflowEngine.processMessage(conversation, savedMessage);
                 }
             }
 

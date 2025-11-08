@@ -10,20 +10,21 @@ import { getRedisClient, type RedisClient } from '@/database/redis.js';
 import { AuthSessionService } from '../application/services/auth-session.service.js';
 import { ChannelRuntimeService } from '../application/services/channel-runtime.service.js';
 import { ChannelWebSocketGateway } from '../application/services/channel-websocket.gateway.js';
+import { AgentsRepository } from '@/modules/identities/agents/infrastructure/agents.repository.js';
+import { ParametersRepository } from '@/modules/parameters/infrastructure/parameters.repository.js';
 import { CompaniesRepository } from '@/modules/identities/companies/infrastructure/companies.repository.js';
+import { AgentMatchingService } from '@/modules/conversations/application/services/agent-matching.service.js';
 import { MessageRepository } from '@/modules/conversations/infrastructure/repositories/message.repository.js';
 import { MessageIngestionService } from '@/modules/conversations/application/services/message-ingestion.service.js';
 import { ConversationResolver } from '@/modules/conversations/application/services/conversation-resolver.service.js';
 import { ConversationRepository } from '@/modules/conversations/infrastructure/repositories/conversation.repository.js';
 import { IntentionClassifierService } from '@/modules/conversations/application/services/intention-classifier.service.js';
-import { ParametersRepository } from '@/modules/parameters/infrastructure/parameters.repository.js';
-import { AgentMatchingService } from '@/modules/conversations/application/services/agent-matching.service.js';
-import { AgentsRepository } from '@/modules/identities/agents/infrastructure/agents.repository.js';
 
 // Use Cases
 import { ChannelUseCases } from '../application/use-cases/channel.usecases.js';
 import { ChannelAuthUseCases } from '../application/use-cases/channel-auth.usecases.js';
 import { MessageRoutingService } from '@/modules/conversations/application/services/message-routing.service.js';
+import { WorkflowEngineService } from '@/modules/conversations/application/services/workflow-engine.service.js';
 
 /**
  * Contenedor de dependencias centralizado para el módulo Channels
@@ -112,13 +113,24 @@ export class ChannelsContainer {
             { cacheTtlSeconds: 60, maxCandidates: 100 }
         );
 
+        // Workflow engine (state management per conversation)
+        const workflowEngine = new WorkflowEngineService(
+            conversationRepository,
+            messageRepository,
+            parametersRepository,
+            agentsRepository,
+            this.runtimeService,
+            { cacheTtlSeconds: 5 * 60 }
+        );
+
         const messageRouting = new MessageRoutingService(
             messageIngestion,
             conversationResolver,
             (event) => this.webSocketGateway.handleWebSocketEvent(event),
             conversationRepository,
             intentionClassifier,
-            agentMatching
+            agentMatching,
+            workflowEngine
         );
           
         this.runtimeService.setMessageRouterService(messageRouting);
@@ -136,9 +148,7 @@ export class ChannelsContainer {
      * Obtiene la instancia singleton del contenedor
     */
     static getInstance(): ChannelsContainer {
-        if (!ChannelsContainer.instance) {
-        throw new Error('ChannelsContainer not initialized. Call create() first.');
-        }
+        if (!ChannelsContainer.instance) throw new Error('ChannelsContainer not initialized. Call create() first.');
         return ChannelsContainer.instance;
     }
 
