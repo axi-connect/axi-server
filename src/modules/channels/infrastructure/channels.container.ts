@@ -17,6 +17,8 @@ import { ConversationResolver } from '@/modules/conversations/application/servic
 import { ConversationRepository } from '@/modules/conversations/infrastructure/repositories/conversation.repository.js';
 import { IntentionClassifierService } from '@/modules/conversations/application/services/intention-classifier.service.js';
 import { ParametersRepository } from '@/modules/parameters/infrastructure/parameters.repository.js';
+import { AgentMatchingService } from '@/modules/conversations/application/services/agent-matching.service.js';
+import { AgentsRepository } from '@/modules/identities/agents/infrastructure/agents.repository.js';
 
 // Use Cases
 import { ChannelUseCases } from '../application/use-cases/channel.usecases.js';
@@ -101,12 +103,22 @@ export class ChannelsContainer {
             { maxHistory: 15, cacheTtlSeconds: 5 * 60, aiTimeoutMs: 9500 } // 9.5 seconds
         );
 
+        // Agent matching (skills/intent filters + load balancing)
+        const agentsRepository = new AgentsRepository();
+        const agentMatching = new AgentMatchingService(
+            agentsRepository,
+            conversationRepository,
+            this.channelRepository,
+            { cacheTtlSeconds: 60, maxCandidates: 100 }
+        );
+
         const messageRouting = new MessageRoutingService(
             messageIngestion,
             conversationResolver,
             (event) => this.webSocketGateway.handleWebSocketEvent(event),
             conversationRepository,
-            intentionClassifier
+            intentionClassifier,
+            agentMatching
         );
           
         this.runtimeService.setMessageRouterService(messageRouting);

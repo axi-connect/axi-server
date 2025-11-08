@@ -59,7 +59,8 @@ export type ChannelEvents =
 export type MessageEvents =
   | 'message.sent'
   | 'message.received'
-  | 'intent.detected';
+  | 'intent.detected'
+  | 'agent.assigned';
 
 export type SystemEvents = never; // Reservado para futuros eventos del sistema
 
@@ -74,6 +75,7 @@ export interface WebSocketEventDataMap {
   'message.received': MessageEntity; // Mensaje persistido/ingestado
   'message.sent': { messageId: string; result?: unknown } | MessageEntity;
   'intent.detected': { conversation_id: string; intention_id: number; code: string; confidence: number };
+  'agent.assigned': { conversation_id: string; agent_id: number; agent_name?: string };
 }
 
 export interface WebSocketEvent<T extends WebSocketEventName = WebSocketEventName> {

@@ -29,7 +29,6 @@ export class MessageRepository implements MessageRepositoryInterface {
 
   async findByConversation(criteria: MessageSearchCriteria): Promise<MessageEntity[]> {
     const where: any = this.buildWhereClause(criteria);
-    console.log(where);
 
     const messages = await this.prisma.messageLog.findMany({
       where,

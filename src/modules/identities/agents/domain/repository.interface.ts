@@ -75,13 +75,15 @@ export type AgentsViewMode = 'summary' | 'detail';
 export interface AgentSearchInterface{
     name?: string;
     phone?: string;
-    company_id?: number;
     alive?: boolean;
     limit?: number;
     offset?: number;
+    skills?: string[];
+    company_id?: number;
     view?: AgentsViewMode;
-    sortBy?: 'id' | 'name' | 'phone' | 'company_id' | 'alive';
+    intention_id?: number;
     sortDir?: 'asc' | 'desc';
+    sortBy?: 'id' | 'name' | 'phone' | 'company_id' | 'alive';
 }
 
 export interface AgentSummaryDTO{
@@ -96,5 +98,6 @@ export interface AgentSummaryDTO{
 export interface AgentDetailDTO extends AgentSummaryDTO{
     client_id:string;
     company: Company;
+    skills: string[];
     agentIntention: AgentIntentionDependency[];
 }

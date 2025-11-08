@@ -1,4 +1,4 @@
-import { AIService } from '@/services/ai/index.js';
+ import { AIService } from '@/services/ai/index.js';
 import { getRedisClient } from '@/database/redis.js';
 import { MessageDirection, type Intention } from '@prisma/client';
 import type { MessageEntity } from '../../domain/entities/message.js';
@@ -10,6 +10,8 @@ export type IntentionClassification = {
     confidence: number;
     intentionId: number;
 };
+
+type AiIntentionResponse = { intentionId?: number; code?: string; confidence?: number };
 
 type ClassifierOptions = {
     maxHistory?: number;
@@ -104,22 +106,20 @@ export class IntentionClassifierService {
             intentionsText
         ].join('\n');
 
-        console.log('PROMPT:', prompt);
-
-        // Ejecutar IA con timeout
-        const aiTask = this.ai.createChat([{ role: 'system', content: prompt }], { type: 'json_object' });
+        // Ejecutar IA con timeout (SLA) usando API tipada
+        const aiTask = this.ai.createJsonChat<AiIntentionResponse>(
+            [{ role: 'system', content: prompt }],
+            { temperature: 0, maxTokens: 256 }
+        );
         const timeoutTask = new Promise<null>((resolve) => setTimeout(() => resolve(null), this.aiTimeoutMs));
-        const result = await Promise.race<[string | null, null] | [null, null]>([
-            aiTask.then((r) => [r, null] as [string | null, null]),
+        const aiResult = await Promise.race<[AiIntentionResponse | null, null] | [null, null]>([
+            aiTask.then((r) => [r, null] as [AiIntentionResponse | null, null]),
             timeoutTask.then(() => [null, null] as [null, null])
         ]);
-        console.log('RESULT:', result);
-        const aiContent = result?.[0] ?? null;
-        console.log('AI CONTENT:', aiContent);
-
-        return null;
+        const AIContent = aiResult?.[0] ?? null;
+ 
         // Fallback heurístico si timeout o respuesta vacía
-        const choice = aiContent ? this.safeParseClassification(aiContent, intentions) : this.keywordHeuristic(history, intentions);
+        const choice = AIContent ? this.safeParseClassification(AIContent, intentions) : this.keywordHeuristic(history, intentions);
         if (!choice) return null;
 
         // Cachear
@@ -127,20 +127,17 @@ export class IntentionClassifierService {
         return choice;
     }
 
-    private safeParseClassification(content: string, intentions: Intention[]): IntentionClassification | null {
+    private safeParseClassification(content: AiIntentionResponse, intentions: Intention[]): IntentionClassification | null {
         try {
-        const parsed = JSON.parse(content) as { intentionId?: number; code?: string; confidence?: number };
-        const intentionId = typeof parsed.intentionId === 'number' ? parsed.intentionId : undefined;
-        const code = typeof parsed.code === 'string' ? parsed.code : undefined;
-        const confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0.6;
-        if (!intentionId && !code) return null;
-        const matched = intentionId
-            ? intentions.find((i) => i.id === intentionId)
-            : intentions.find((i) => i.code.toLowerCase() === (code ?? '').toLowerCase());
-        if (!matched) return null;
-        return { intentionId: matched.id, code: matched.code, confidence: Math.max(0, Math.min(1, confidence)) };
+            const { intentionId, code, confidence } = content;
+            if (!confidence) return null;
+            const matched = intentionId
+                ? intentions.find((i) => i.id === intentionId)
+                : intentions.find((i) => i.code.toLowerCase() === (code ?? '').toLowerCase());
+            if (!matched) return null;
+            return { intentionId: matched.id, code: matched.code, confidence: Math.max(0, Math.min(1, confidence)) };
         } catch {
-        return null;
+            return null;
         }
     }
 
@@ -149,12 +146,12 @@ export class IntentionClassifierService {
         const text = history[0]?.message?.toLowerCase() ?? '';
         let best: { it: Intention; score: number } | null = null;
         for (const it of intentions) {
-        const code = it.code.toLowerCase();
-        const instructions = (it.ai_instructions ?? '').toLowerCase();
-        const score =
-            (text.includes(code) ? 1 : 0) +
-            (instructions && text ? Math.min(0.5, instructions.split(' ').filter((w) => w && text.includes(w)).length / 20) : 0);
-        if (!best || score > best.score) best = { it, score };
+            const description = it.description.toLowerCase();
+            const instructions = it.ai_instructions.toLowerCase();
+            const score =
+                (text.includes(description) ? 1 : 0) +
+                (Math.min(0.5, instructions.split(' ').filter((w) => w && text.includes(w)).length / 20));
+            if (!best || score > best.score) best = { it, score };
         }
         if (!best) return null;
         return { intentionId: best.it.id, code: best.it.code, confidence: Math.max(0.3, Math.min(0.8, best.score)) };

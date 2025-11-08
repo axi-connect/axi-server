@@ -43,7 +43,17 @@ export class AgentsRepository implements AgentsRepositoryInterface{
         if(search.phone) where.phone = { contains: search.phone.replace(/\D/g,'') };
         if(search.company_id) where.company_id = search.company_id;
         if(typeof search.alive === 'boolean') where.alive = search.alive;
-
+        if (search.intention_id) {
+            where.agentIntention = {
+                some: {intention_id: search.intention_id}
+            };
+        }
+        if (search.skills && search.skills.length > 0) {
+            where.skills = {
+                hasEvery: search.skills  // Postgres: tiene todas las skills | "hasSome" si solo necesita una
+            };
+        }
+        
         const sortBy = (search.sortBy ?? 'id');
         const sortDir = (search.sortDir ?? 'desc');
 
@@ -66,13 +76,22 @@ export class AgentsRepository implements AgentsRepositoryInterface{
 
     async findAgentsDetail(search:AgentSearchInterface = {}):Promise<{agents: AgentDetailDTO[], total:number}>{
         const where:any = {};
+        const sortBy = (search.sortBy ?? 'id');
+        const sortDir = (search.sortDir ?? 'desc');
         if(search.name) where.name = { contains: normalizeTextValue(search.name), mode: 'insensitive' };
         if(search.phone) where.phone = { contains: search.phone.replace(/\D/g,'') };
         if(search.company_id) where.company_id = search.company_id;
         if(typeof search.alive === 'boolean') where.alive = search.alive;
-
-        const sortBy = (search.sortBy ?? 'id');
-        const sortDir = (search.sortDir ?? 'desc');
+        if (search.intention_id) {
+            where.agentIntention = {
+                some: {intention_id: search.intention_id}
+            };
+        }
+        if (search.skills && search.skills.length > 0) {
+            where.skills = {
+                hasEvery: search.skills  // Postgres: tiene todas las skills | "hasSome" si solo necesita una
+            };
+        }
 
         const [agents, total] = await this.db.$transaction([
             this.db.agent.findMany({
@@ -89,10 +108,11 @@ export class AgentsRepository implements AgentsRepositoryInterface{
             name: a.name,
             phone: a.phone,
             alive: a.alive,
+            skills: a.skills,
             client_id: a.client_id,
             character: a.character,
-            company: {id: a.company.id, name: a.company.name},
-            agentIntention: a.agentIntention
+            agentIntention: a.agentIntention,
+            company: {id: a.company.id, name: a.company.name}
         })) as AgentDetailDTO[];
         return {agents: detail, total};
     }
