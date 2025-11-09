@@ -1,17 +1,20 @@
-import { getRedisClient } from '@/database/redis.js';
 import { InputJsonValue } from '@prisma/client/runtime/library';
 import { MessageEntity } from '../../domain/entities/message.js';
+import { MessageInput } from '../../domain/entities/message.js';
+import { FlowRegistryService } from './flow-registry.service.js';
+import { StepExecutorService } from './step-executor.service.js';
+import { StepContext } from '../../domain/interfaces/workflow.interface.js';
 import type { ConversationEntity } from '../../domain/entities/conversation.js';
-import { AgentsRepository } from '@/modules/identities/agents/infrastructure/agents.repository.js';
 import { ParametersRepository } from '@/modules/parameters/infrastructure/parameters.repository.js';
-import { MessageRepositoryInterface } from '../../domain/repositories/message-repository.interface.js';
-import { ChannelRuntimeService } from '@/modules/channels/application/services/channel-runtime.service.js';
 import { ConversationRepositoryInterface } from '../../domain/repositories/conversation-repository.interface.js';
+import { ChannelRuntimeService } from '@/modules/channels/application/services/channel-runtime.service.js';
+import { MessageDirection } from '@prisma/client';
 
 /**
  * Estado del workflow persistido por conversación
 */
 export interface WorkflowState {
+    error?: string;
     agentId?: number;
     lastStepAt?: Date;
     flowName?: string;
@@ -19,6 +22,7 @@ export interface WorkflowState {
     intentionId?: number;
     completedSteps: string[];
     collectedData: Record<string, unknown>;
+    status?: 'running' | 'completed' | 'failed' | 'paused';
 }
 
 /**
@@ -32,24 +36,14 @@ export interface WorkflowStepResult {
     data?: Record<string, unknown>;
 }
 
-type WorkflowEngineOptions = {
-    cacheTtlSeconds?: number;
-};
-
 export class WorkflowEngineService {
-    private readonly redis = getRedisClient();
-    private readonly cacheTtlSeconds: number;
-
     constructor(
         private readonly conversationRepository: ConversationRepositoryInterface,
-        private readonly messageRepository: MessageRepositoryInterface,
         private readonly parametersRepository: ParametersRepository,
-        private readonly agentsRepository: AgentsRepository,
         private readonly channelRuntime: ChannelRuntimeService,
-        options?: WorkflowEngineOptions
-    ) {
-        this.cacheTtlSeconds = options?.cacheTtlSeconds ?? 5 * 60; // 5 min
-    }
+        private readonly flowRegistry: FlowRegistryService,
+        private readonly stepExecutor: StepExecutorService,
+    ) {}
 
     /**
      * Obtiene el estado del workflow de una conversación
@@ -165,36 +159,117 @@ export class WorkflowEngineService {
     async processMessage(
         conversation: ConversationEntity,
         message: MessageEntity
-    ): Promise<WorkflowStepResult | null> {
+    ): Promise<void> {
         // Inicializar workflow si no existe
         let state = conversation.workflow_state as WorkflowState | null;
         if (!state) {
             state = await this.initializeWorkflow(conversation);
-            if (!state) return null;
+            if (!state) return;
         }
 
-        // Obtener historial reciente para contexto
-        // const history = await this.messageRepository.findByConversation({
-        //     limit: 10,
-        //     sortDir: 'desc',
-        //     sortBy: 'timestamp',
-        //     conversation_id: conversationId,
-        // });
+        // Obtener definición del flujo
+        const flow = this.flowRegistry.getFlow(state.flowName!);
+        if (!flow) {
+            console.error(`Flujo '${state.flowName}' no encontrado para conversación ${conversation.id}`);
+            return;
+        }
 
-        // Determinar si debemos avanzar el workflow
-        // Por ahora, simplemente marcamos que se recibió un mensaje
-        // La lógica específica del workflow se ejecutará en otro lugar
-        const result: WorkflowStepResult = {
-            completed: false,
-            step: state.currentStep || 'start',
-            data: {
-                messageId: message.id,
-                messageText: message.message,
-                timestamp: message.timestamp
-            }
+        // Encontrar el paso actual
+        const currentStepId = state.currentStep || flow.initialStep;
+        const currentStep = flow.steps.find(step => step.id === currentStepId);
+
+        if (!currentStep) {
+            console.error(`Paso '${currentStepId}' no encontrado en flujo '${flow.name}'`);
+            return;
+        }
+
+        // Preparar contexto para el paso
+        const context: StepContext = {
+            message,
+            conversation,
+            companyId: conversation.company_id,
+            channelId: conversation.channel_id,
+            collectedData: state.collectedData || {}
         };
 
-        return result;
+        try {
+            // Ejecutar el paso
+            const result = await this.stepExecutor.executeStep(currentStep, context);
+
+            // Actualizar estado basado en el resultado
+            if (result.completed) {
+                // Marcar paso como completado
+                await this.completeStep(conversation.id, currentStepId, result.data);
+
+                // Enviar mensaje si el paso lo indica
+                if (result.shouldSendMessage && result.message) {
+                    await this.sendWorkflowMessage(conversation, result.message);
+                }
+
+                // Determinar siguiente paso
+                let nextStepId = result.nextStep;
+
+                // Si no hay nextStep definido en el resultado, usar el definido en el paso
+                if (!nextStepId) nextStepId = currentStep.nextStep;
+
+                // Si hay un siguiente paso, actualizar estado
+                if (nextStepId) {
+                    await this.updateWorkflowState(conversation.id, {currentStep: nextStepId});
+                } else if (flow.finalStep && currentStepId === flow.finalStep) {
+                    // Si no hay siguiente paso y el flujo tiene finalStep, marcar como completado
+                    await this.updateWorkflowState(conversation.id, {status: 'completed'});
+                }
+            } else if (result.error) {
+                // Marcar workflow como fallido si hay error crítico
+                await this.updateWorkflowState(conversation.id, {
+                    status: 'failed',
+                    error: result.error
+                });
+                console.error(`Error en paso '${currentStepId}' del flujo '${flow.name}': ${result.error}`);
+            }
+
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error(`Error ejecutando paso '${currentStepId}' en flujo '${flow.name}':`, err);
+
+            // Marcar como fallido
+            await this.updateWorkflowState(conversation.id, {
+                status: 'failed',
+                error: err.message
+            });
+        }
+    }
+
+    /**
+     * Envía un mensaje generado por un paso del workflow
+    */
+    private async sendWorkflowMessage(conversation: ConversationEntity, message: string): Promise<void> {
+        try {
+            const messageInput: MessageInput = {
+                from: '', // Se determinará automáticamente por el provider
+                message: message,
+                content_type: 'chat',
+                provider_message_id: '', // Se generará automáticamente por el provider
+                to: conversation.contact_id!, // ID del contacto (número de teléfono)
+                conversation_id: conversation.id,
+                channel_id: conversation.channel_id,
+                direction: MessageDirection.outgoing,
+            };
+
+            // Enviar mensaje a través del runtime
+            const result = await this.channelRuntime.emitMessage(messageInput);
+
+            if (!result.success) {
+                console.error(`Error enviando mensaje del workflow: ${result.error}`);
+                throw new Error(`Fallo al enviar mensaje del workflow: ${result.error}`);
+            }
+
+            console.log(`Mensaje del workflow enviado exitosamente a conversación ${conversation.id}`);
+
+        } catch (error) {
+            console.error(`Error crítico enviando mensaje del workflow:`, error);
+            throw error; // Re-throw para que el workflow pueda manejar el error
+        }
     }
 
     /**

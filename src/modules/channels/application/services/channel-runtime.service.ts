@@ -193,6 +193,8 @@ export class ChannelRuntimeService {
         payload.direction = MessageDirection.outgoing;
         const result = await provider.sendMessage(payload);
         if (!result.success) throw new Error(result.error || `Error enviando mensaje en canal ${channelId}`);
+        await this.messageRouterService?.handleOutgoingMessage(channelId, payload, channel.company_id);
+        
         return result;
     }
 

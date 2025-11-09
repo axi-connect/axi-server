@@ -242,9 +242,7 @@ export class WhatsappProvider extends BaseProvider {
       }
 
       // Si es error de sesión, marcar como no autenticado
-      if (error.message && error.message.includes('session')) {
-        this.authenticated = false;
-      }
+      if (error.message && error.message.includes('session')) this.authenticated = false;
 
       return {
         success: false,

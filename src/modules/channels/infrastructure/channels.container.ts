@@ -1,31 +1,33 @@
 import { Server } from 'socket.io';
 import { PrismaClient } from '@prisma/client';
+import { getRedisClient, type RedisClient } from '@/database/redis.js';
 
 // Repositories
 import { ChannelRepository } from './repositories/channel.repository.js';
 import { CredentialRepository } from './repositories/credential.repository.js';
-
-// Services
-import { getRedisClient, type RedisClient } from '@/database/redis.js';
-import { AuthSessionService } from '../application/services/auth-session.service.js';
-import { ChannelRuntimeService } from '../application/services/channel-runtime.service.js';
-import { ChannelWebSocketGateway } from '../application/services/channel-websocket.gateway.js';
 import { AgentsRepository } from '@/modules/identities/agents/infrastructure/agents.repository.js';
 import { ParametersRepository } from '@/modules/parameters/infrastructure/parameters.repository.js';
 import { CompaniesRepository } from '@/modules/identities/companies/infrastructure/companies.repository.js';
-import { AgentMatchingService } from '@/modules/conversations/application/services/agent-matching.service.js';
 import { MessageRepository } from '@/modules/conversations/infrastructure/repositories/message.repository.js';
+import { ConversationRepository } from '@/modules/conversations/infrastructure/repositories/conversation.repository.js';
+
+// Services
+import { AuthSessionService } from '../application/services/auth-session.service.js';
+import { ChannelRuntimeService } from '../application/services/channel-runtime.service.js';
+import { ChannelWebSocketGateway } from '../application/services/channel-websocket.gateway.js';
+import { FlowRegistryService } from '@/modules/conversations/application/services/flow-registry.service.js';
+import { StepExecutorService } from '@/modules/conversations/application/services/step-executor.service.js';
+import { AgentMatchingService } from '@/modules/conversations/application/services/agent-matching.service.js';
+import { WorkflowEngineService } from '@/modules/conversations/application/services/workflow-engine.service.js';
+import { MessageRoutingService } from '@/modules/conversations/application/services/message-routing.service.js';
 import { MessageIngestionService } from '@/modules/conversations/application/services/message-ingestion.service.js';
 import { ConversationResolver } from '@/modules/conversations/application/services/conversation-resolver.service.js';
-import { ConversationRepository } from '@/modules/conversations/infrastructure/repositories/conversation.repository.js';
 import { IntentionClassifierService } from '@/modules/conversations/application/services/intention-classifier.service.js';
+import { ConversationOrchestratorService } from '@/modules/conversations/application/services/conversation-orchestrator.service.js';
 
 // Use Cases
 import { ChannelUseCases } from '../application/use-cases/channel.usecases.js';
 import { ChannelAuthUseCases } from '../application/use-cases/channel-auth.usecases.js';
-import { MessageRoutingService } from '@/modules/conversations/application/services/message-routing.service.js';
-import { WorkflowEngineService } from '@/modules/conversations/application/services/workflow-engine.service.js';
-import { ConversationOrchestratorService } from '@/modules/conversations/application/services/conversation-orchestrator.service.js';
 
 /**
  * Contenedor de dependencias centralizado para el módulo Channels
@@ -114,14 +116,19 @@ export class ChannelsContainer {
             { cacheTtlSeconds: 60, maxCandidates: 100 }
         );
 
+        // Flow registry (central flow definitions repository)
+        const flowRegistry = new FlowRegistryService();
+
+        // Step executor (executes individual workflow steps)
+        const stepExecutor = new StepExecutorService();
+
         // Workflow engine (state management per conversation)
         const workflowEngine = new WorkflowEngineService(
             conversationRepository,
-            messageRepository,
             parametersRepository,
-            agentsRepository,
             this.runtimeService,
-            { cacheTtlSeconds: 5 * 60 }
+            flowRegistry,
+            stepExecutor,
         );
 
         // Conversation orchestrator (coordinates intent → agent → workflow)
