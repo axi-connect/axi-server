@@ -1,5 +1,7 @@
 import { ContactType } from '@prisma/client';
 import { InputJsonValue } from '@prisma/client/runtime/library';
+import { WorkflowState } from '../../application/services/workflow-engine.service.js';
+import { MessageInput } from './message.js';
 
 export interface Contact {
   id: string;
@@ -44,9 +46,9 @@ export interface ConversationEntity {
   contact_id?: string;
   intention_id?: number;
   last_message_at?: Date;
-  workflow_state?: unknown;
   contact_type: ContactType;
   assigned_agent_id?: number;
+  workflow_state?: WorkflowState;
 }
 
 export interface CreateConversationData {
@@ -69,3 +71,9 @@ export interface UpdateConversationData {
   intention_id?: number;
   workflow_state?: InputJsonValue | undefined;
 }
+
+export type MessageHandlerData<T> = {
+  message: T;
+  contact: Contact;
+  conversation?: ConversationEntity;
+};

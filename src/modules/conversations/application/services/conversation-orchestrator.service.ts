@@ -1,8 +1,7 @@
-import { Contact } from '../../domain/entities/conversation.js';
 import { MessageEntity } from '../../domain/entities/message.js';
 import { AgentMatchingService } from './agent-matching.service.js';
 import { WorkflowEngineService } from './workflow-engine.service.js';
-import { ConversationEntity } from '../../domain/entities/conversation.js';
+import { MessageHandlerData } from '../../domain/entities/conversation.js';
 import { IntentionClassifierService } from './intention-classifier.service.js';
 import { WebSocketEvent } from '@/modules/channels/domain/entities/channel.js';
 import { ConversationRepositoryInterface } from '../../domain/repositories/conversation-repository.interface.js';
@@ -19,11 +18,8 @@ export class ConversationOrchestratorService {
     /**
      * Procesa un mensaje entrante completo: intención → agente → workflow
     */
-    async processIncomingMessage(
-        conversation: ConversationEntity,
-        message: MessageEntity,
-        contact: Contact
-    ): Promise<void> {
+    async processIncomingMessage({ conversation, message, contact }: MessageHandlerData<MessageEntity>): Promise<void> {
+        if (!conversation) throw new Error('Conversation not found');
         // 1. Clasificar intención si no existe
         if (!conversation.intention_id) {
             const choice = await this.intentionClassifier.classifyConversation(conversation.id);
@@ -67,7 +63,7 @@ export class ConversationOrchestratorService {
 
         // 3. Procesar workflow si tenemos intención y agente
         if (conversation.intention_id && conversation.assigned_agent_id) {
-            await this.workflowEngine.processMessage(conversation, message);
+            await this.workflowEngine.processMessage({ conversation, message, contact });
         }
     }
 }

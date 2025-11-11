@@ -43,7 +43,7 @@ export class ConversationResolver {
             if (found) return found;
         }
 
-        // 2) DB lookup by (participant_id, channel)
+        // 2) DB lookup by (contact_id, channel_id)
         const existing = await this.conversationRepository.findByContact(contact.id, channelId);
         if (existing.length > 0) {
             const conversation = existing[0];

@@ -1,14 +1,14 @@
+import { MessageDirection } from '@prisma/client';
 import { InputJsonValue } from '@prisma/client/runtime/library';
 import { MessageEntity } from '../../domain/entities/message.js';
 import { MessageInput } from '../../domain/entities/message.js';
 import { FlowRegistryService } from './flow-registry.service.js';
 import { StepExecutorService } from './step-executor.service.js';
-import { StepContext } from '../../domain/interfaces/workflow.interface.js';
-import type { ConversationEntity } from '../../domain/entities/conversation.js';
+import type { ConversationEntity, MessageHandlerData } from '../../domain/entities/conversation.js';
 import { ParametersRepository } from '@/modules/parameters/infrastructure/parameters.repository.js';
-import { ConversationRepositoryInterface } from '../../domain/repositories/conversation-repository.interface.js';
+import { StepContext, StepDefinition, StepResult } from '../../domain/interfaces/workflow.interface.js';
 import { ChannelRuntimeService } from '@/modules/channels/application/services/channel-runtime.service.js';
-import { MessageDirection } from '@prisma/client';
+import { ConversationRepositoryInterface } from '../../domain/repositories/conversation-repository.interface.js';
 
 /**
  * Estado del workflow persistido por conversación
@@ -44,29 +44,6 @@ export class WorkflowEngineService {
         private readonly flowRegistry: FlowRegistryService,
         private readonly stepExecutor: StepExecutorService,
     ) {}
-
-    /**
-     * Obtiene el estado del workflow de una conversación
-    */
-    async getWorkflowState(conversationId: string): Promise<WorkflowState | null> {
-        const conversation = await this.conversationRepository.findById(conversationId);
-        if (!conversation || !conversation.workflow_state) return null;
-
-        try {
-            const state = conversation.workflow_state as WorkflowState;
-            return {
-                agentId: state.agentId,
-                flowName: state.flowName,
-                currentStep: state.currentStep,
-                intentionId: state.intentionId,
-                collectedData: state.collectedData || {},
-                lastStepAt: state.lastStepAt ? new Date(state.lastStepAt) : undefined,
-                completedSteps: Array.isArray(state.completedSteps) ? state.completedSteps : [],
-            };
-        } catch {
-            return null;
-        }
-    }
 
     /**
      * Inicializa el workflow para una conversación si no existe
@@ -106,10 +83,10 @@ export class WorkflowEngineService {
      * Actualiza el estado del workflow
     */
     async updateWorkflowState(
-        conversationId: string,
+        conversation: ConversationEntity,
         updates: Partial<WorkflowState>
     ): Promise<WorkflowState | null> {
-        const current = await this.getWorkflowState(conversationId);
+        const current = conversation.workflow_state;
         if (!current) return null;
 
         const updated: WorkflowState = {
@@ -118,7 +95,7 @@ export class WorkflowEngineService {
             lastStepAt: new Date()
         };
 
-        await this.conversationRepository.update(conversationId, {
+        await this.conversationRepository.update(conversation.id, {
             workflow_state: updated as unknown as InputJsonValue
         });
 
@@ -129,37 +106,40 @@ export class WorkflowEngineService {
      * Marca un paso como completado y avanza al siguiente
     */
     async completeStep(
-        conversationId: string,
-        step: string,
-        data?: Record<string, unknown>
+        conversation: ConversationEntity,
+        step: StepDefinition,
+        result: StepResult
     ): Promise<WorkflowState | null> {
-        const current = await this.getWorkflowState(conversationId);
+        const current = conversation.workflow_state;
         if (!current) return null;
 
         // Evitar repetir pasos ya completados
-        if (current.completedSteps.includes(step)) return current;
+        if (current.completedSteps.includes(step.id)) return current;
+
+        // Determinar siguiente paso
+        let nextStepId = result.nextStep;
+
+        // Si no hay nextStep definido en el resultado, usar el definido en el paso
+        if (!nextStepId) nextStepId = step.nextStep;
 
         const updated: WorkflowState = {
             ...current,
-            completedSteps: [...current.completedSteps, step],
-            collectedData: { ...current.collectedData, ...(data || {}) },
-            lastStepAt: new Date()
+            lastStepAt: new Date(),
+            currentStep: nextStepId,
+            completedSteps: [...current.completedSteps, step.id],
+            collectedData: { ...current.collectedData, ...(result.data || {}) }
         };
 
-        await this.conversationRepository.update(conversationId, {
-            workflow_state: updated as unknown as InputJsonValue
-        });
-
-        return updated;
+        return this.updateWorkflowState(conversation, updated);
     }
 
     /**
      * Procesa un mensaje y avanza el workflow si corresponde
     */
     async processMessage(
-        conversation: ConversationEntity,
-        message: MessageEntity
+        { conversation, message }: MessageHandlerData<MessageEntity>
     ): Promise<void> {
+        if (!conversation) throw new Error('Conversation not found');
         // Inicializar workflow si no existe
         let state = conversation.workflow_state as WorkflowState | null;
         if (!state) {
@@ -198,30 +178,21 @@ export class WorkflowEngineService {
 
             // Actualizar estado basado en el resultado
             if (result.completed) {
+                // Si el flujo tiene finalStep y estamos en el paso final, marcar como completado
+                if (flow.finalStep && currentStepId === flow.finalStep) {
+                    conversation.workflow_state!.status = 'completed';
+                }
+                
                 // Marcar paso como completado
-                await this.completeStep(conversation.id, currentStepId, result.data);
+                await this.completeStep(conversation, currentStep, result);
 
                 // Enviar mensaje si el paso lo indica
                 if (result.shouldSendMessage && result.message) {
                     await this.sendWorkflowMessage(conversation, result.message);
                 }
-
-                // Determinar siguiente paso
-                let nextStepId = result.nextStep;
-
-                // Si no hay nextStep definido en el resultado, usar el definido en el paso
-                if (!nextStepId) nextStepId = currentStep.nextStep;
-
-                // Si hay un siguiente paso, actualizar estado
-                if (nextStepId) {
-                    await this.updateWorkflowState(conversation.id, {currentStep: nextStepId});
-                } else if (flow.finalStep && currentStepId === flow.finalStep) {
-                    // Si no hay siguiente paso y el flujo tiene finalStep, marcar como completado
-                    await this.updateWorkflowState(conversation.id, {status: 'completed'});
-                }
             } else if (result.error) {
                 // Marcar workflow como fallido si hay error crítico
-                await this.updateWorkflowState(conversation.id, {
+                await this.updateWorkflowState(conversation, {
                     status: 'failed',
                     error: result.error
                 });
@@ -233,7 +204,7 @@ export class WorkflowEngineService {
             console.error(`Error ejecutando paso '${currentStepId}' en flujo '${flow.name}':`, err);
 
             // Marcar como fallido
-            await this.updateWorkflowState(conversation.id, {
+            await this.updateWorkflowState(conversation, {
                 status: 'failed',
                 error: err.message
             });
@@ -270,14 +241,6 @@ export class WorkflowEngineService {
             console.error(`Error crítico enviando mensaje del workflow:`, error);
             throw error; // Re-throw para que el workflow pueda manejar el error
         }
-    }
-
-    /**
-     * Verifica si un paso ya fue completado
-    */
-    async isStepCompleted(conversationId: string, step: string): Promise<boolean> {
-        const state = await this.getWorkflowState(conversationId);
-        return state?.completedSteps.includes(step) ?? false;
     }
 
     /**
