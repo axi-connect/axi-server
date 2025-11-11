@@ -6,9 +6,9 @@ import { FlowRegistryService } from './flow-registry.service.js';
 import { StepExecutorService } from './step-executor.service.js';
 import type { ConversationEntity, MessageHandlerData } from '../../domain/entities/conversation.js';
 import { ParametersRepository } from '@/modules/parameters/infrastructure/parameters.repository.js';
-import { StepContext, StepDefinition, StepResult } from '../../domain/interfaces/workflow.interface.js';
 import { ChannelRuntimeService } from '@/modules/channels/application/services/channel-runtime.service.js';
 import { ConversationRepositoryInterface } from '../../domain/repositories/conversation-repository.interface.js';
+import { StepContext, StepDefinition, StepResult, FlowDefinition } from '../../domain/interfaces/workflow.interface.js';
 
 /**
  * Estado del workflow persistido por conversación
@@ -65,17 +65,14 @@ export class WorkflowEngineService {
             collectedData: {},
             completedSteps: [],
             flowName: flow_name,
-            currentStep: 'start',
             lastStepAt: new Date(),
             intentionId: conversation.intention_id,
             agentId: conversation.assigned_agent_id
         };
 
         // Persistir estado inicial
-        await this.conversationRepository.update(conversation.id, {
-            workflow_state: initialState as unknown as InputJsonValue
-        });
-
+        conversation.workflow_state = initialState;
+        await this.updateWorkflowState(conversation, initialState);
         return initialState;
     }
 
@@ -163,42 +160,9 @@ export class WorkflowEngineService {
             return;
         }
 
-        // Preparar contexto para el paso
-        const context: StepContext = {
-            message,
-            conversation,
-            companyId: conversation.company_id,
-            channelId: conversation.channel_id,
-            collectedData: state.collectedData || {}
-        };
-
         try {
-            // Ejecutar el paso
-            const result = await this.stepExecutor.executeStep(currentStep, context);
-
-            // Actualizar estado basado en el resultado
-            if (result.completed) {
-                // Si el flujo tiene finalStep y estamos en el paso final, marcar como completado
-                if (flow.finalStep && currentStepId === flow.finalStep) {
-                    conversation.workflow_state!.status = 'completed';
-                }
-                
-                // Marcar paso como completado
-                await this.completeStep(conversation, currentStep, result);
-
-                // Enviar mensaje si el paso lo indica
-                if (result.shouldSendMessage && result.message) {
-                    await this.sendWorkflowMessage(conversation, result.message);
-                }
-            } else if (result.error) {
-                // Marcar workflow como fallido si hay error crítico
-                await this.updateWorkflowState(conversation, {
-                    status: 'failed',
-                    error: result.error
-                });
-                console.error(`Error en paso '${currentStepId}' del flujo '${flow.name}': ${result.error}`);
-            }
-
+            // Ejecutar el paso actual y manejar avance automático
+            await this.executeStep(conversation, message, flow, currentStep, state);
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
             console.error(`Error ejecutando paso '${currentStepId}' en flujo '${flow.name}':`, err);
@@ -212,8 +176,100 @@ export class WorkflowEngineService {
     }
 
     /**
-     * Envía un mensaje generado por un paso del workflow
+     * Ejecuta un paso y maneja el avance automático si corresponde
     */
+    private async executeStep(
+        conversation: ConversationEntity,
+        message: MessageEntity,
+        flow: FlowDefinition,
+        currentStep: StepDefinition,
+        state: WorkflowState
+    ): Promise<void> {
+        const currentStepId = currentStep.id;
+
+        // Preparar contexto para el paso
+        const context: StepContext = {
+            message,
+            conversation,
+            companyId: conversation.company_id,
+            channelId: conversation.channel_id,
+            collectedData: state.collectedData || {}
+        };
+
+        // Ejecutar el paso
+        const result = await this.stepExecutor.executeStep(currentStep, context);
+
+        // Actualizar estado basado en el resultado
+        if (result.completed) {
+            // Si el flujo tiene finalStep y estamos en el paso final, marcar como completado
+            if (flow.finalStep && currentStepId === flow.finalStep) {
+                conversation.workflow_state!.status = 'completed';
+            }
+
+            // Marcar paso como completado
+            state = await this.completeStep(conversation, currentStep, result) || state;
+
+            // Enviar mensaje si el paso lo indica
+            if (result.shouldSendMessage && result.message) {
+                await this.sendWorkflowMessage(conversation, result.message);
+            }
+
+            // Verificar si el paso debe avanzar automáticamente
+            const shouldAutoAdvance = this.shouldAutoAdvance(currentStep, result, context);
+            if (shouldAutoAdvance) {
+                console.log(`🔄 Avance automático activado para paso '${currentStepId}'`);
+
+                // Determinar el siguiente paso
+                const nextStepId = result.nextStep || currentStep.nextStep;
+                if (nextStepId) {
+                    const nextStep = flow.steps.find(step => step.id === nextStepId);
+                    if (nextStep) {
+                        console.log(`➡️ Continuando automáticamente al paso '${nextStepId}'`);
+
+                        // Ejecutar recursivamente el siguiente paso
+                        await this.executeStep(conversation, message, flow, nextStep as StepDefinition, state);
+                        return; // Salir para evitar doble ejecución
+                    } else {
+                        console.warn(`Siguiente paso '${nextStepId}' no encontrado en flujo '${flow.name}'`);
+                    }
+                } else {
+                    console.log(`Fin del flujo alcanzado después del paso '${currentStepId}'`);
+                }
+            } else {
+                console.log(`⏹️ Avance automático no activado para paso '${currentStepId}', esperando input del usuario`);
+            }
+        } else if (result.error) {
+            // Marcar workflow como fallido si hay error crítico
+            await this.updateWorkflowState(conversation, {
+                status: 'failed',
+                error: result.error
+            });
+            console.error(`Error en paso '${currentStepId}' del flujo '${flow.name}': ${result.error}`);
+        }
+    }
+
+    /**
+     * Determina si un paso debe avanzar automáticamente al siguiente
+    */
+    private shouldAutoAdvance(
+        step: StepDefinition,
+        result: StepResult,
+        context: StepContext
+    ): boolean {
+        if (!step.autoAdvance) return false;
+
+        // Si autoAdvance es un booleano, usar directamente
+        if (typeof step.autoAdvance === 'boolean') {
+            return step.autoAdvance;
+        }
+
+        // Si es una función, evaluarla con el resultado y contexto
+        return step.autoAdvance(result, context);
+    }
+
+    /**
+     * Envía un mensaje generado por un paso del workflow
+     */
     private async sendWorkflowMessage(conversation: ConversationEntity, message: string): Promise<void> {
         try {
             const messageInput: MessageInput = {

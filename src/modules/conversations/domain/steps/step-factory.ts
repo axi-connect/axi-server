@@ -246,8 +246,8 @@ export class StepFactory {
             description: `Envía mensaje: ${message.substring(0, 50)}...`,
             nextStep: options?.nextStep,
             execute: async () => ({
-                completed: true,
                 message,
+                completed: true,
                 shouldSendMessage: true,
                 data: options?.data || {}
             })

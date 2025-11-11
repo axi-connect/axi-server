@@ -186,16 +186,66 @@ export class ChannelRuntimeService {
         const channelId = payload.channel_id;
         const provider = this.activeProviders.get(channelId);
         if (!provider) throw new Error(`Canal ${channelId} no está activo`);
-        
+
         const channel = await this.channelRepository.findById(channelId);
         if (!channel) throw new Error(`Canal ${channelId} no encontrado`);
-        
+
         payload.direction = MessageDirection.outgoing;
         const result = await provider.sendMessage(payload);
         if (!result.success) throw new Error(result.error || `Error enviando mensaje en canal ${channelId}`);
-        await this.messageRouterService?.handleOutgoingMessage(channelId, payload, channel.company_id);
-        
+        // await this.messageRouterService?.handleOutgoingMessage(channelId, payload, channel.company_id);
+
         return result;
+    }
+
+    /**
+     * Activa el indicador de escritura (typing) en un canal
+    */
+    async sendTyping(channelId: string, to: string): Promise<boolean> {
+        try {
+            const provider = this.activeProviders.get(channelId);
+            if (!provider) {
+                console.warn(`Canal ${channelId} no está activo para typing`);
+                return false;
+            }
+
+            if (provider instanceof WhatsappProvider) {
+                await provider.sendTyping(to);
+                return true;
+            }
+
+            // Para otros providers, implementar si es necesario
+            console.log(`Typing no implementado para provider del canal ${channelId}`);
+            return false;
+        } catch (error) {
+            console.error(`Error activando typing en canal ${channelId}:`, error);
+            return false;
+        }
+    }
+
+    /**
+     * Desactiva el indicador de escritura (typing) en un canal
+    */
+    async clearTyping(channelId: string, to: string): Promise<boolean> {
+        try {
+            const provider = this.activeProviders.get(channelId);
+            if (!provider) {
+                console.warn(`Canal ${channelId} no está activo para clear typing`);
+                return false;
+            }
+
+            if (provider instanceof WhatsappProvider) {
+                await provider.clearTyping(to);
+                return true;
+            }
+
+            // Para otros providers, implementar si es necesario
+            console.log(`Clear typing no implementado para provider del canal ${channelId}`);
+            return false;
+        } catch (error) {
+            console.error(`Error desactivando typing en canal ${channelId}:`, error);
+            return false;
+        }
     }
 
     /**

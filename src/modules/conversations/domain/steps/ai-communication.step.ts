@@ -29,20 +29,20 @@ export class AICommunicationStep {
             requiredData: options.requiredData,
             execute: async (context: StepContext): Promise<StepResult> => {
                 try {
-                    // Construir el prompt con contexto
-                    let prompt = options.question;
-
-                    if (options.contextPrompt) {
-                        prompt = `${options.contextPrompt}\n\nPregunta: ${options.question}`;
-                    }
-
-                    // Agregar datos recopilados del contexto si existen
-                    if (Object.keys(context.collectedData).length > 0) {
-                        prompt += `\n\nInformación recopilada hasta ahora:\n${JSON.stringify(context.collectedData, null, 2)}`;
-                    }
-
-                    // Agregar historial de conversación reciente
-                    prompt += `\n\nMensaje del usuario: ${context.message.message}`;
+                    const prompt = JSON.stringify({
+                        task: "ai_question",
+                        return_format: "text_response",
+                        question: options.question,
+                        context_prompt: options.contextPrompt,
+                        collected_data: context.collectedData,
+                        user_message: context.message.message,
+                        response_style: {
+                            tone: "professional and helpful",
+                            length: "concise but complete",
+                            language: "Spanish"
+                        },
+                        instructions: "Provide a clear, concise, and helpful response as Axi Connect professional assistant."
+                    });
 
                     // Llamar a la IA
                     const aiResponse = await this.aiService.createChat([
@@ -62,7 +62,7 @@ export class AICommunicationStep {
 
                     return {
                         completed: true,
-                        message: aiResponse.content,
+                        message: aiResponse.content || '',
                         shouldSendMessage: true,
                         data: {
                             ai_response: aiResponse.content,
@@ -90,27 +90,29 @@ export class AICommunicationStep {
         positiveThreshold?: number;
     }): StepDefinition {
         return {
+            retries: 1,
+            timeout: 8000,
             id: options.id,
+            nextStep: options.nextStep,
             name: 'Análisis de Sentimiento',
             description: 'Analiza el sentimiento del mensaje del usuario',
-            timeout: 8000,
-            retries: 1,
-            nextStep: options.nextStep,
             execute: async (context: StepContext): Promise<StepResult> => {
                 try {
-                    const prompt = `Analiza el sentimiento del siguiente mensaje y clasifícalo como POSITIVO, NEGATIVO o NEUTRAL.
-                    También proporciona un score de confianza entre 0 y 1.
+                    const prompt = JSON.stringify({
+                        task: "sentiment_analysis",
+                        return_format: "json",
+                        message: context.message.message,
+                        expected_format: {
+                            sentiment: "POSITIVO | NEGATIVO | NEUTRAL",
+                            confidence: "number between 0-1",
+                            reasoning: "brief explanation string"
+                        },
+                        instructions: "Analyze the sentiment and return JSON with exactly these field names and types"
+                    });
 
-Responde en formato JSON:
-{
-    "sentiment": "POSITIVO|NEGATIVO|NEUTRAL",
-    "confidence": 0.95,
-    "reasoning": "breve explicación"
-}
+                    console.log('🤖❓ Prompt', prompt);
 
-Mensaje: "${context.message.message}"`;
-
-                    const aiResponse = await this.aiService.createJsonChat<{
+                    const AIResponse = await this.aiService.createJsonChat<{
                         sentiment: 'POSITIVO' | 'NEGATIVO' | 'NEUTRAL';
                         confidence: number;
                         reasoning: string;
@@ -119,29 +121,29 @@ Mensaje: "${context.message.message}"`;
                         { role: 'user', content: prompt }
                     ], {
                         temperature: 0,
-                        maxTokens: 200
+                        maxTokens: 512
                     });
 
-                    if (!aiResponse) {
+                    if (!AIResponse) {
                         return {
                             completed: false,
                             error: 'No se pudo analizar el sentimiento del mensaje'
                         };
                     }
 
-                    const sentiment = aiResponse.sentiment;
+                    console.log('🤖 AIResponse', AIResponse);
+                    const sentiment = AIResponse.sentiment;
                     const threshold = options.positiveThreshold || 0.7;
 
                     return {
                         completed: true,
                         data: {
                             sentiment,
-                            sentiment_confidence: aiResponse.confidence,
-                            sentiment_reasoning: aiResponse.reasoning,
-                            is_positive: sentiment === 'POSITIVO' && aiResponse.confidence >= threshold
+                            sentiment_reasoning: AIResponse.reasoning,
+                            sentiment_confidence: AIResponse.confidence,
+                            is_positive: sentiment === 'POSITIVO' && AIResponse.confidence >= threshold
                         }
                     };
-
                 } catch (error) {
                     console.error(`Error en análisis de sentimiento ${options.id}:`, error);
                     return {

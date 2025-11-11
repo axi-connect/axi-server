@@ -91,7 +91,6 @@ export class AgentMatchingService {
      */
     async assignIfNeeded(conversation: ConversationEntity, intentionId: number, options?: AgentMatchOptions): Promise<number | null> {
         const agentId = await this.matchAgentForConversation(conversation, intentionId, options);
-        console.log('agentId', agentId);
         if (!agentId) return null;
         await this.conversationRepository.assignAgent(conversation.id, agentId);
         // Increment load counter (best-effort)

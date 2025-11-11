@@ -12,6 +12,7 @@ import { MessageRepository } from '@/modules/conversations/infrastructure/reposi
 import { ConversationRepository } from '@/modules/conversations/infrastructure/repositories/conversation.repository.js';
 
 // Services
+import { AIService } from '@/services/ai/index.js';
 import { AuthSessionService } from '../application/services/auth-session.service.js';
 import { ChannelRuntimeService } from '../application/services/channel-runtime.service.js';
 import { ChannelWebSocketGateway } from '../application/services/channel-websocket.gateway.js';
@@ -28,6 +29,7 @@ import { ConversationOrchestratorService } from '@/modules/conversations/applica
 // Use Cases
 import { ChannelUseCases } from '../application/use-cases/channel.usecases.js';
 import { ChannelAuthUseCases } from '../application/use-cases/channel-auth.usecases.js';
+import { createReceptionFlow } from '@/modules/conversations/domain/flows/reception.flow.js';
 
 /**
  * Contenedor de dependencias centralizado para el módulo Channels
@@ -118,6 +120,9 @@ export class ChannelsContainer {
 
         // Flow registry (central flow definitions repository)
         const flowRegistry = new FlowRegistryService();
+        // Initialize Flows
+        const aiService = new AIService();
+        flowRegistry.registerFlow(createReceptionFlow(aiService, intentionClassifier));
 
         // Step executor (executes individual workflow steps)
         const stepExecutor = new StepExecutorService();
@@ -136,6 +141,7 @@ export class ChannelsContainer {
             agentMatching,
             workflowEngine,
             intentionClassifier,
+            this.runtimeService, // Para typing indicators
             (event) => this.webSocketGateway.handleWebSocketEvent(event),
             conversationRepository
         );

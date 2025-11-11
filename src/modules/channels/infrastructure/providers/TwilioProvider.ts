@@ -1,12 +1,13 @@
 import { ChannelProvider } from '@prisma/client';
-import { BaseProvider, ProviderConfig, MessagePayload, ProviderResponse, WebhookMessage } from './BaseProvider.js';
+import { MessageInput } from '@/modules/conversations/domain/entities/message.js';
+import { BaseProvider, ProviderConfig, ProviderResponse, WebhookMessage } from './BaseProvider.js';
 
 export class TwilioProvider extends BaseProvider {
   constructor(config: ProviderConfig) {
     super(config, ChannelProvider.TWILIO);
   }
 
-  async sendMessage(payload: MessagePayload): Promise<ProviderResponse> {
+  async sendMessage(payload: MessageInput): Promise<ProviderResponse> {
     try {
       // Validate required config
       if (!this.validateConfig(['accountSid', 'authToken'])) {

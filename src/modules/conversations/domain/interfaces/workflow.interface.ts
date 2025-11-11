@@ -38,6 +38,8 @@ export interface StepDefinition {
     condition?: (context: StepContext) => boolean;
     execute: (context: StepContext) => Promise<StepResult>;
     onError?: (error: Error, context: StepContext) => Promise<StepResult>;
+    // Propiedad para avance automático
+    autoAdvance?: boolean | ((result: StepResult, context: StepContext) => boolean);
 }
 
 /**

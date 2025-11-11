@@ -56,13 +56,6 @@ export class IntentionClassifierService {
         return lines.join('\n');
     }
 
-    private formatIntentions(intentions: Intention[]): string {
-        // Listado compacto de opciones disponibles: CODE: instructions
-        return intentions
-        .map((i) => `${i.id}|${i.code}: Si el cliente tiene la intención de ${i.ai_instructions}`)
-        .join('\n');
-    }
-
     async classifyConversation(conversationId: string): Promise<IntentionClassification | null> {
         // Obtener último mensaje para cache-key
         const latest = await this.messageRepository.findLatestByConversation(conversationId);
@@ -91,29 +84,34 @@ export class IntentionClassifierService {
         // Obtener intenciones disponibles (global por ahora)
         const { intentions } = await this.parametersRepository.findIntentions({ limit: 100 });
         if (!intentions.length) return null;
-        const intentionsText = this.formatIntentions(intentions);
 
-        // Construir prompt
-        const prompt = [
-            'Analiza el contexto de la conversación y selecciona la intención más adecuada.',
-            'Devuelve estrictamente un JSON válido con la forma {"intentionId": number, "code": string, "confidence": number}.',
-            'Restringe la elección a la lista de intenciones proporcionadas.',
-            '',
-            'HISTORIAL:',
-            historyText || '(sin historial)',
-            '',
-            'INTENCIONES DISPONIBLES (id|code: instrucciones):',
-            intentionsText
-        ].join('\n');
+        // Construir prompt JSON estructurado para máxima precisión y eficiencia
+        const prompt = JSON.stringify({
+            task: "intention_classification",
+            return_format: "json",
+            expected_format: {
+                intentionId: "number - ID exacto de la intención seleccionada",
+                code: "string - código exacto de la intención seleccionada",
+                confidence: "number between 0-1 - nivel de confianza en la clasificación"
+            },
+            conversation_history: historyText || "(sin historial)",
+            available_intentions: intentions.map(i => ({
+                id: i.id,
+                code: i.code,
+                instructions: `Si el cliente tiene la intención de ${i.ai_instructions}`
+            })),
+            instructions: "Analiza el historial de conversación y selecciona UNA SOLA intención de la lista disponible. Devuelve estrictamente el JSON con los campos requeridos. La confianza debe reflejar qué tan claro es el match."
+        });
 
         // Ejecutar IA con timeout (SLA) usando API tipada
-        const aiTask = this.ai.createJsonChat<AiIntentionResponse>(
+        const AITask = this.ai.createJsonChat<AiIntentionResponse>(
             [{ role: 'system', content: prompt }],
             { temperature: 0, maxTokens: 256 }
         );
+        
         const timeoutTask = new Promise<null>((resolve) => setTimeout(() => resolve(null), this.aiTimeoutMs));
         const aiResult = await Promise.race<[AiIntentionResponse | null, null] | [null, null]>([
-            aiTask.then((r) => [r, null] as [AiIntentionResponse | null, null]),
+            AITask.then((r) => [r, null] as [AiIntentionResponse | null, null]),
             timeoutTask.then(() => [null, null] as [null, null])
         ]);
         const AIContent = aiResult?.[0] ?? null;

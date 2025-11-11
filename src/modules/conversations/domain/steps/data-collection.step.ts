@@ -24,34 +24,31 @@ export class DataCollectionStep {
         allowPartial?: boolean; // Si permite completar con datos parciales
     }): StepDefinition {
         return {
+            retries: 2,
             id: options.id,
+            nextStep: options.nextStep,
+            timeout: options.timeout || 10000,
             name: `Extracción de Datos: ${options.fields.map(f => f.name).join(', ')}`,
             description: `Extrae los siguientes datos: ${options.fields.map(f => f.description).join(', ')}`,
-            timeout: options.timeout || 10000,
-            retries: 2,
-            nextStep: options.nextStep,
-            requiredData: options.fields.filter(f => f.required).map(f => f.name),
+            // requiredData: options.fields.filter(f => f.required).map(f => f.name),
             execute: async (context: StepContext): Promise<StepResult> => {
                 try {
-                    const extractedData: Record<string, unknown> = {};
-
                     // Construir el prompt para extracción
-                    const fieldsPrompt = options.fields.map(field =>
-                        `- ${field.name}: ${field.description}${field.required ? ' (REQUERIDO)' : ' (OPCIONAL)'}`
-                    ).join('\n');
+                    const prompt = JSON.stringify({
+                        return_format: "json",
+                        fields: options.fields,
+                        task: "data_extraction",
+                        message: context.message.message,
+                        expected_format: {
+                            [options.fields[0]?.name || "field_name"]: "extracted_value or null"
+                        },
+                        instructions: "Extract requested information and return JSON with field names as keys. Use null for missing required data."
+                    });
 
-                    const prompt = `Del siguiente mensaje, extrae la información solicitada.
-Si no encuentras algún dato, déjalo como null.
-
-Campos a extraer:
-${fieldsPrompt}
-
-Mensaje: "${context.message.message}"
-
-Responde ÚNICAMENTE con un objeto JSON válido donde las claves sean los nombres de los campos.`;
+                    console.log('🤖❓ Prompt', prompt);
 
                     // Extraer datos usando IA
-                    const aiResponse = await this.aiService.createJsonChat<Record<string, unknown>>(
+                    const AIResponse = await this.aiService.createJsonChat<Record<string, unknown>>(
                         [
                             { role: 'system', content: 'Eres un extractor de datos. Responde únicamente con JSON válido.' },
                             { role: 'user', content: prompt }
@@ -61,30 +58,28 @@ Responde ÚNICAMENTE con un objeto JSON válido donde las claves sean los nombre
                             maxTokens: 300
                         }
                     );
+                    console.log('🤖 AIResponse', AIResponse);
 
                     // Validar y filtrar datos extraídos
                     let hasAllRequired = true;
                     const validatedData: Record<string, unknown> = {};
 
                     for (const field of options.fields) {
-                        const value = aiResponse[field.name];
+                        const value = AIResponse?.[field.name];
 
                         // Validar si es requerido
-                        if (field.required && (value === null || value === undefined || value === '')) {
-                            hasAllRequired = false;
-                            continue;
-                        }
-
-                        // Aplicar validación personalizada si existe
-                        if (field.validation && value !== null && value !== undefined) {
-                            if (!field.validation(value)) {
+                        if (value === null || value === undefined || value === '') {
+                            if (field.required) {
+                                hasAllRequired = false;
+                                continue;
+                            }
+                        } else {
+                            // Aplicar validación personalizada si existe
+                            if (field.validation && !field.validation(value)) {
                                 console.warn(`Validación fallida para campo ${field.name}: ${value}`);
                                 if (field.required) hasAllRequired = false;
                                 continue;
                             }
-                        }
-
-                        if (value !== null && value !== undefined) {
                             validatedData[field.name] = value;
                         }
                     }
@@ -93,9 +88,9 @@ Responde ÚNICAMENTE con un objeto JSON válido donde las claves sean los nombre
                     if (!hasAllRequired && !options.allowPartial) {
                         return {
                             completed: false,
-                            message: `Necesito más información. Por favor proporciona: ${options.fields.filter(f => f.required && !validatedData[f.name]).map(f => f.description).join(', ')}`,
                             shouldSendMessage: true,
-                            data: { partial_data: validatedData }
+                            data: { partial_data: validatedData },
+                            message: `Necesito más información. Por favor proporciona: ${options.fields.filter(f => f.required && !validatedData[f.name]).map(f => f.description).join(', ')}`,
                         };
                     }
 

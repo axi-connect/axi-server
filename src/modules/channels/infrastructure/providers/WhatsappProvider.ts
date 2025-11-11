@@ -167,6 +167,7 @@ export class WhatsappProvider extends BaseProvider {
     // Manejar mensajes salientes desde el dispositivo
     this.client.on('message_create', async (message: Message) => {
       try {
+        console.log('event message_create is activated 🚨🚨');
         if (message.fromMe && this.messageHandler){
           await this.messageHandler({
             contact: {
@@ -370,6 +371,40 @@ export class WhatsappProvider extends BaseProvider {
   */
   async isAuthenticated(): Promise<boolean> {
     return this.authenticated;
+  }
+
+  /**
+   * Activa el indicador de escritura (typing) para un contacto
+  */
+  async sendTyping(to: string): Promise<void> {
+    if (!this.client) throw new Error('Cliente WhatsApp no inicializado');
+
+    try {
+      const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
+      const chat = await this.client.getChatById(chatId);
+      await chat.sendStateTyping();
+      console.log(`✅ Typing activado para ${to} en canal ${this.channelId}`);
+    } catch (error) {
+      console.error(`Error activando typing para ${to}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Desactiva el indicador de escritura (typing) para un contacto
+  */
+  async clearTyping(to: string): Promise<void> {
+    if (!this.client) throw new Error('Cliente WhatsApp no inicializado');
+
+    try {
+      const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
+      const chat = await this.client.getChatById(chatId);
+      await chat.clearState();
+      console.log(`✅ Typing desactivado para ${to} en canal ${this.channelId}`);
+    } catch (error) {
+      console.error(`Error desactivando typing para ${to}:`, error);
+      throw error;
+    }
   }
 
   /**

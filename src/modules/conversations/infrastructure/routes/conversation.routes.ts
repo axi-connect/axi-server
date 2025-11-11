@@ -7,11 +7,12 @@ import { MessageRepository } from '../repositories/message.repository.js';
 import { MessageUseCases } from '../../application/use-cases/message.usecases.js';
 import { ConversationController } from '../controllers/conversation.controller.js';
 import { ConversationUseCases } from '../../application/use-cases/conversation.usecases.js';
+import { ChannelsContainer } from '@/modules/channels/infrastructure/channels.container.js';
 import { AgentsRepository } from '@/modules/identities/agents/infrastructure/agents.repository.js';
+import { ChannelRepository } from '@/modules/channels/infrastructure/repositories/channel.repository.js';
 import { CompaniesRepository } from '@/modules/identities/companies/infrastructure/companies.repository.js';
 import { ConversationValidator } from '@/modules/conversations/infrastructure/validators/conversation.validator.js';
 import { ConversationRepository } from '@/modules/conversations/infrastructure/repositories/conversation.repository.js';
-import { ChannelRepository } from '@/modules/channels/infrastructure/repositories/channel.repository.js';
 
 /**
  * Create and configure conversation routes
@@ -25,9 +26,11 @@ export function createConversationRouter(prisma: PrismaClient): Router {
 
   // Initialize use cases
   const agentsRepository = new AgentsRepository();
+  const container = ChannelsContainer.getInstance();
+  const runtimeService = container.getRuntimeService();
   const companiesRepository = new CompaniesRepository();
   const channelRepository = new ChannelRepository(prisma);
-  const messageUseCases = new MessageUseCases(messageRepository);
+  const messageUseCases = new MessageUseCases(runtimeService, messageRepository);
   const conversationUseCases = new ConversationUseCases(conversationRepository, messageRepository, companiesRepository, agentsRepository, channelRepository);
 
   // Initialize controllers

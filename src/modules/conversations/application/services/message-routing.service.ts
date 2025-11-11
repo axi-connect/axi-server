@@ -35,11 +35,6 @@ export class MessageRoutingService {
         try {
             const savedMessage = await this.messageIngestion.ingest(message);
 
-            // Coordinar intención → agente → workflow
-            if (this.conversationOrchestrator) {
-                await this.conversationOrchestrator.processIncomingMessage({ conversation, message: savedMessage, contact });
-            }
-
             // Emitir evento de mensaje recibido
             this.emitWebSocketEvent({
                 channelId,
@@ -48,6 +43,11 @@ export class MessageRoutingService {
                 companyId: contact.company_id,
                 timestamp: new Date()
             });
+
+            // Coordinar intención → agente → workflow
+            if (this.conversationOrchestrator) {
+                await this.conversationOrchestrator.processIncomingMessage({ conversation, message: savedMessage, contact });
+            }
 
             console.log(`📨 Mensaje recibido en canal ${channelId}`);
             return savedMessage;
