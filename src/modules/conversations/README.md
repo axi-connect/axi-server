@@ -642,6 +642,67 @@ private createInitialIntentionExtractionStep(): StepDefinition {
 - 📈 **Escalabilidad**: Cambios centralizados afectan todo el sistema
 - 🛡️ **Consistency**: Mismos algoritmos y umbrales en todas partes
 
+### 🔄 **Redirección Automática de Flujos - Experiencia Seamless**
+
+#### **Problema Anterior:**
+❌ **Mensajes hardcoded**: El paso de transferencia enviaba mensajes genéricos
+❌ **Experiencia artificial**: Usuario recibía confirmaciones innecesarias
+❌ **Flujos desconectados**: Reception Flow no se integraba realmente con flujos especializados
+❌ **Duplicación de lógica**: Cada intención tenía su propio mensaje mapeado
+
+#### **Solución Implementada:**
+✅ **Redirección automática**: Sistema cambia directamente al flujo correcto
+✅ **Experiencia natural**: Usuario pasa seamless entre flujos sin interrupciones
+✅ **Lógica centralizada**: Workflow Engine maneja todas las transiciones
+✅ **Primer paso automático**: Nuevo flujo ejecuta su welcome inmediatamente
+
+#### **Flujo de Experiencia Actual:**
+
+```
+Usuario: "Hola, buenas tardes"
+Sistema: Extrae contacto, resuelve conversación, asigna agente, clasifica intención
+Agente: "¡Hola! 👋 Bienvenido a Axi Connect"
+
+Usuario: "Quisiera ordenar una pizza"
+Sistema: Clasifica intención → buy_intent
+Sistema: Transfiere automáticamente al Seller Flow
+Seller Flow: Ejecuta paso welcome automáticamente
+Agente: "¡Perfecto! Vamos a ordenar tu pizza..."
+```
+
+#### **Arquitectura Técnica:**
+
+```typescript
+// 1. Workflow Engine centraliza la lógica de cambio de flujos
+switchToFlowForIntention(conversation, intentionId, message) {
+    // Inicializa nuevo workflow
+    const newState = initializeWorkflowForIntention(conversation, intentionId);
+    // Obtiene definición del flujo
+    const flow = flowRegistry.getFlow(newState.flowName);
+    // Ejecuta primer paso automáticamente
+    executeStep(conversation, message, flow, firstStep, newState);
+}
+
+// 2. Paso de transferencia delega completamente
+createFlowTransferStep(): StepDefinition {
+    execute: async (context) => {
+        await this.workflowEngine.switchToFlowForIntention(
+            context.conversation,
+            intentionId,
+            context.message
+        );
+        return { completed: true }; // Sin mensajes hardcoded
+    }
+}
+```
+
+#### **Beneficios de la Redirección Automática:**
+- 🎯 **Experiencia fluida**: Sin mensajes de transición artificiales
+- ⚡ **Procesamiento inmediato**: Usuario pasa directamente al flujo correcto
+- 🧠 **Inteligencia contextual**: Sistema mantiene contexto completo
+- 🔧 **Mantenibilidad**: Un solo lugar para lógica de routing
+- 📈 **Escalabilidad**: Fácil agregar nuevos flujos sin cambiar reception
+
 ## 🚀 Próximas Expansiones
 
 - **Workflows configurables**: UI para diseñar flujos sin código

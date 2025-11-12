@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { Server as SocketIOServer } from 'socket.io';
-import { ChannelsContainer } from './channels.container.js';
+import { ChannelsContainer } from './channels.container_old.js';
 import { type ChannelWebSocketGateway } from '../application/services/channel-websocket.gateway.js';
 
 /**

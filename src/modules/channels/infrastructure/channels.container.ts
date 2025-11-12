@@ -1,6 +1,8 @@
 import { Server } from 'socket.io';
 import { PrismaClient } from '@prisma/client';
-import { getRedisClient, type RedisClient } from '@/database/redis.js';
+import { getRedisClient } from '@/database/redis.js';
+import { createContainer, asClass, asValue, InjectionMode } from 'awilix';
+
 
 // Repositories
 import { ChannelRepository } from './repositories/channel.repository.js';
@@ -31,204 +33,66 @@ import { ChannelUseCases } from '../application/use-cases/channel.usecases.js';
 import { ChannelAuthUseCases } from '../application/use-cases/channel-auth.usecases.js';
 import { createReceptionFlow } from '@/modules/conversations/domain/flows/reception.flow.js';
 
-/**
- * Contenedor de dependencias centralizado para el módulo Channels
- * Maneja la creación e inyección de todas las dependencias de manera profesional
-*/
-export class ChannelsContainer {
-    private prisma: PrismaClient;
-    private redisClient: RedisClient;
-    private static instance: ChannelsContainer;
+export function createChannelsContainer(io: Server) {
+    const container = createContainer({
+        injectionMode: InjectionMode.PROXY
+    });
 
-    // Repositories
-    private channelRepository: ChannelRepository;
-    private credentialRepository: CredentialRepository;
+    // Paso 1: Registrar dependencias
+    container.register({
+        // Infrastructure
+        prisma: asValue(new PrismaClient()),
+        redisClient: asValue(getRedisClient()),
+        io: asValue(io),
 
-    // Services
-    private runtimeService: ChannelRuntimeService;
-    private authSessionService: AuthSessionService;
-    private webSocketGateway: ChannelWebSocketGateway;
+        // Repositories
+        channelRepository: asClass(ChannelRepository).singleton(),
+        credentialRepository: asClass(CredentialRepository).singleton(),
+        conversationRepository: asClass(ConversationRepository).singleton(),
+        messageRepository: asClass(MessageRepository).singleton(),
+        agentsRepository: asClass(AgentsRepository).singleton(),
+        parametersRepository: asClass(ParametersRepository).singleton(),
+        companiesRepository: asClass(CompaniesRepository).singleton(),
 
-    // Use Cases
-    private channelUseCases: ChannelUseCases;
-    private channelAuthUseCases: ChannelAuthUseCases; // Acceso directo al caso de uso de autenticación
+        // Core Services
+        authSessionService: asClass(AuthSessionService).singleton(),
+        channelRuntimeService: asClass(ChannelRuntimeService).singleton(),
+        webSocketGateway: asClass(ChannelWebSocketGateway).singleton(),
+        aiService: asClass(AIService).singleton(),
 
-    private constructor(io: Server) {
-        this.prisma = new PrismaClient();
-        this.redisClient = getRedisClient();
+        // Workflow Services
+        flowRegistry: asClass(FlowRegistryService).singleton(),
+        stepExecutor: asClass(StepExecutorService).singleton(),
+        workflowEngine: asClass(WorkflowEngineService).singleton(),
+        intentionClassifier: asClass(IntentionClassifierService).singleton(),
+        agentMatching: asClass(AgentMatchingService).singleton(),
+        conversationOrchestrator: asClass(ConversationOrchestratorService).singleton(),
 
-        // Initialize repositories
-        this.channelRepository = new ChannelRepository(this.prisma);
-        this.credentialRepository = new CredentialRepository(this.prisma);
-        
-        // Initialize services
-        this.authSessionService = new AuthSessionService(this.redisClient);
-        this.runtimeService = new ChannelRuntimeService(this.channelRepository, this.authSessionService);
-        this.webSocketGateway = new ChannelWebSocketGateway(io, this.runtimeService);
+        // Message Services
+        messageIngestion: asClass(MessageIngestionService).singleton(),
+        conversationResolver: asClass(ConversationResolver).singleton(),
+        messageRouting: asClass(MessageRoutingService).singleton(),
 
-        // Connect runtime service with WebSocket gateway
-        this.runtimeService.setWebSocketCallback((event) => { this.webSocketGateway.handleWebSocketEvent(event) });
+        // Use Cases
+        channelUseCases: asClass(ChannelUseCases).singleton(),
+        channelAuthUseCases: asClass(ChannelAuthUseCases).singleton(),
+    });
 
-        const companiesRepository = new CompaniesRepository();
-        this.channelAuthUseCases = new ChannelAuthUseCases(
-            this.runtimeService,
-            this.authSessionService,
-            this.channelRepository,
-            this.credentialRepository,
-            companiesRepository
-        );
-        
-        // Initialize use cases
-        this.channelUseCases = new ChannelUseCases(
-            this.runtimeService,
-            this.channelAuthUseCases,
-            this.channelRepository,
-        );
+    // Paso 2: Inicialización post-registro (para dependencias circulares)
+    const messageRouting:MessageRoutingService = container.resolve('messageRouting');
+    const webSocketGateway:ChannelWebSocketGateway = container.resolve('webSocketGateway');
+    const runtimeService:ChannelRuntimeService = container.resolve('channelRuntimeService');
+    
+    runtimeService.setWebSocketCallback((event) => webSocketGateway.handleWebSocketEvent(event));
+    runtimeService.setMessageRouterService(messageRouting);
 
-        // Wire ConversationResolver for inbound messages
-        const conversationRepository = new ConversationRepository(this.prisma);
-        const conversationResolver = new ConversationResolver(
-            conversationRepository,
-            this.channelRepository,
-            60 * 60 * 24
-        );
+    // Paso 3: Registrar flows
+    const flowRegistry = container.resolve<FlowRegistryService>('flowRegistry');
+    const aiService = container.resolve<AIService>('aiService');
+    const intentionClassifier = container.resolve<IntentionClassifierService>('intentionClassifier');
+    const workflowEngine = container.resolve<WorkflowEngineService>('workflowEngine');
+    
+    flowRegistry.registerFlow(createReceptionFlow(aiService, intentionClassifier, workflowEngine));
 
-        // Wire MessageIngestion pipeline (MessageUseCases + ConversationUseCases)
-        const messageRepository = new MessageRepository(this.prisma);
-        const messageIngestion = new MessageIngestionService(
-            messageRepository,
-            conversationRepository,
-            { idempotencyTtlSeconds: 15 * 60, maxMetadataBytes: 32 * 1024 } // 15 minutes, 32KB
-        );
-
-        // Intention classifier (Redis cache + AI fallback)
-        const parametersRepository = new ParametersRepository();
-        const intentionClassifier = new IntentionClassifierService(
-            messageRepository,
-            parametersRepository,
-            { maxHistory: 15, cacheTtlSeconds: 5 * 60, aiTimeoutMs: 9500 } // 9.5 seconds
-        );
-
-        // Agent matching (skills/intent filters + load balancing)
-        const agentsRepository = new AgentsRepository();
-        const agentMatching = new AgentMatchingService(
-            agentsRepository,
-            conversationRepository,
-            this.channelRepository,
-            { cacheTtlSeconds: 60, maxCandidates: 100 }
-        );
-
-        // Flow registry (central flow definitions repository)
-        const flowRegistry = new FlowRegistryService();
-        // Initialize Flows
-        const aiService = new AIService();
-        flowRegistry.registerFlow(createReceptionFlow(aiService, intentionClassifier));
-
-        // Step executor (executes individual workflow steps)
-        const stepExecutor = new StepExecutorService();
-
-        // Workflow engine (state management per conversation)
-        const workflowEngine = new WorkflowEngineService(
-            conversationRepository,
-            parametersRepository,
-            this.runtimeService,
-            flowRegistry,
-            stepExecutor,
-        );
-
-        // Conversation orchestrator (coordinates intent → agent → workflow)
-        const conversationOrchestrator = new ConversationOrchestratorService(
-            agentMatching,
-            workflowEngine,
-            intentionClassifier,
-            this.runtimeService, // Para typing indicators
-            (event) => this.webSocketGateway.handleWebSocketEvent(event),
-            conversationRepository
-        );
-
-        const messageRouting = new MessageRoutingService(
-            messageIngestion,
-            conversationResolver,
-            (event) => this.webSocketGateway.handleWebSocketEvent(event),
-            conversationOrchestrator
-        );
-          
-        this.runtimeService.setMessageRouterService(messageRouting);
-    }
-
-    /**
-     * Crea o obtiene la instancia singleton del contenedor
-    */
-    static create(io: Server): ChannelsContainer {
-        if (!ChannelsContainer.instance) ChannelsContainer.instance = new ChannelsContainer(io);
-        return ChannelsContainer.instance;
-    }
-
-    /**
-     * Obtiene la instancia singleton del contenedor
-    */
-    static getInstance(): ChannelsContainer {
-        if (!ChannelsContainer.instance) throw new Error('ChannelsContainer not initialized. Call create() first.');
-        return ChannelsContainer.instance;
-    }
-
-    // Getters para acceder a las dependencias
-    getChannelRepository(): ChannelRepository {
-        return this.channelRepository;
-    }
-
-    getCredentialRepository(): CredentialRepository {
-        return this.credentialRepository;
-    }
-
-    getRuntimeService(): ChannelRuntimeService {
-        return this.runtimeService;
-    }
-
-    getAuthSessionService(): AuthSessionService {
-        return this.authSessionService;
-    }
-
-    getWebSocketGateway(): ChannelWebSocketGateway {
-        return this.webSocketGateway;
-    }
-
-    getChannelUseCases(): ChannelUseCases {
-        return this.channelUseCases;
-    }
-
-    getPrisma(): PrismaClient {
-        return this.prisma;
-    }
-
-    getRedisClient(): any {
-        return this.redisClient;
-    }
-
-    /**
-     * Inicializa automáticamente los canales activos
-    */
-    async initializeActiveChannels(): Promise<void> {
-        await this.runtimeService.initializeActiveChannels();
-    }
-
-    /**
-     * Cierra todas las conexiones y limpia recursos
-    */
-    async shutdown(): Promise<void> {
-        console.log('🧹 Cerrando ChannelsContainer...');
-
-        try {
-        await this.runtimeService.shutdown();
-        await this.authSessionService.shutdown();
-        await this.redisClient.disconnect();
-        await this.prisma.$disconnect();
-
-        ChannelsContainer.instance = null as any;
-        console.log('✅ ChannelsContainer cerrado correctamente');
-        } catch (error) {
-        console.error('❌ Error cerrando ChannelsContainer:', error);
-        throw error;
-        }
-    }
+    return container;
 }

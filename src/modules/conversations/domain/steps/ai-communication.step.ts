@@ -20,13 +20,13 @@ export class AICommunicationStep {
         timeout?: number;
     }): StepDefinition {
         return {
-            id: options.id,
-            name: `AI Communication: ${options.question.substring(0, 50)}...`,
-            description: `Envía pregunta a IA: ${options.question}`,
-            timeout: options.timeout || 10000,
             retries: 2,
+            id: options.id,
             nextStep: options.nextStep,
+            timeout: options.timeout || 10000,
             requiredData: options.requiredData,
+            description: `Envía pregunta a IA: ${options.question}`,
+            name: `AI Communication: ${options.question.substring(0, 50)}...`,
             execute: async (context: StepContext): Promise<StepResult> => {
                 try {
                     const prompt = JSON.stringify({
@@ -62,8 +62,8 @@ export class AICommunicationStep {
 
                     return {
                         completed: true,
-                        message: aiResponse.content || '',
                         shouldSendMessage: true,
+                        message: aiResponse.content || '',
                         data: {
                             ai_response: aiResponse.content,
                             ai_question: options.question

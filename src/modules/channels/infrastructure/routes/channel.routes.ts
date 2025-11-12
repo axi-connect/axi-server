@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authorize } from '@/middlewares/rbac.middleware.js';
-import { ChannelsContainer } from '../channels.container.js';
+import { ChannelsContainer } from '../channels.container_old.js';
 import { ChannelValidator } from '../../shared/validators/channel.validator.js';
 import { ChannelController } from '@/modules/channels/infrastructure/controllers/channel.controller.js';
 

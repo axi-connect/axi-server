@@ -1,7 +1,58 @@
 import { AIService } from '@/services/ai/index.js';
 import { StepFactory } from '../steps/step-factory.js';
 import { FlowDefinition, StepDefinition } from '../interfaces/workflow.interface.js';
+import { WorkflowEngineService, type WorkflowState } from '../../application/services/workflow-engine.service.js';
 import { type IntentionClassification, IntentionClassifierService } from '../../application/services/intention-classifier.service.js';
+
+/**
+ * Utilidad para validación y clasificación de intenciones
+ */
+class IntentionValidationUtil {
+    /**
+     * Valida la confianza de una intención clasificada y determina el siguiente paso
+     */
+    static validateAndRoute(classification: IntentionClassification): {
+        isValid: boolean;
+        needsClarification: boolean;
+        priority: 'high' | 'medium' | 'low';
+        nextStep: string;
+        confidence: number;
+    } {
+        // Umbrales de confianza por tipo de intención
+        const confidenceThresholds = {
+            'high': 0.8,    // Intenciones críticas (compras, soporte urgente)
+            'medium': 0.6,  // Intenciones normales (consultas, citas)
+            'low': 0.4      // Intenciones básicas (saludos, general)
+        };
+
+        // Determinar prioridad de la intención
+        const priority = this.getIntentionPriority(classification.code);
+        const minConfidence = confidenceThresholds[priority];
+        const isValid = classification.confidence >= minConfidence;
+        const needsClarification = !isValid;
+
+        return {
+            isValid,
+            needsClarification,
+            priority,
+            nextStep: isValid ? 'transfer_to_specialized_flow' : 'ask_for_clarification',
+            confidence: classification.confidence
+        };
+    }
+
+    /**
+     * Determina la prioridad de una intención para ajustar umbrales de confianza
+    */
+    private static getIntentionPriority(intentionCode: string): 'high' | 'medium' | 'low' {
+        const highPriorityIntentions = ['buy_intent', 'support_request'];
+        const mediumPriorityIntentions = ['schedule_appointment', 'product_question'];
+        const lowPriorityIntentions = ['general_inquiry', 'follow_up'];
+
+        if (highPriorityIntentions.includes(intentionCode)) return 'high';
+        if (mediumPriorityIntentions.includes(intentionCode)) return 'medium';
+        return 'low';
+    }
+}
 
 /**
  * Reception Flow - Flujo general para atención inicial
@@ -10,15 +61,16 @@ import { type IntentionClassification, IntentionClassifierService } from '../../
  * mensajes sin contexto específico. Su objetivo es:
  * 1. Dar una bienvenida cálida y profesional
  * 2. Analizar el sentimiento y contexto del mensaje inicial
- * 3. Intentar clasificar la intención del usuario
+ * 3. Clasificar y validar la intención del usuario
  * 4. Dirigir al flujo apropiado o pedir más información
 */
 export class ReceptionFlow {
     private stepFactory: StepFactory;
 
     constructor(
-        aiService: AIService, 
-        private intentionClassifier: IntentionClassifierService
+        aiService: AIService,
+        private intentionClassifier: IntentionClassifierService,
+        private workflowEngine: WorkflowEngineService
     ) {
         this.stepFactory = new StepFactory(aiService);
     }
@@ -31,23 +83,20 @@ export class ReceptionFlow {
             version: '1.0.0',
             name: 'Reception Flow',
             initialStep: 'welcome_user',
-            timeout: 300000, // 5 minutos para completar el flujo
             finalStep: 'transfer_to_specialized_flow',
+            timeout: 300000, // 5 minutos para completar el flujo
             description: 'Flujo general para atención inicial o recepción de mensajes sin contexto específico',
             steps: [
                 // PASO 1: Bienvenida y análisis inicial
                 this.createWelcomeStep(),
 
                 // PASO 2: Análisis de sentimiento
-                this.createSentimentAnalysisStep(),
+                // this.createSentimentAnalysisStep(),
 
-                // PASO 3: Extracción de intención inicial
+                // PASO 3: Clasificación y validación integrada de intención
                 this.createInitialIntentionExtractionStep(),
 
-                // PASO 4: Validación y clasificación
-                this.createIntentionValidationStep(),
-
-                // PASO 5: Transferencia al flujo especializado
+                // PASO 4: Transferencia al flujo especializado 
                 this.createFlowTransferStep()
             ],
             metadata: {
@@ -73,7 +122,7 @@ export class ReceptionFlow {
             '• Tengo una pregunta sobre un servicio\n' +
             '• Necesito soporte técnico',
             {
-                nextStep: 'analyze_sentiment',
+                nextStep: 'extract_intention',
                 data: {
                     user_greeted: true,
                     welcome_timestamp: new Date().toISOString(),
@@ -109,10 +158,9 @@ export class ReceptionFlow {
             requiredData: [],
             autoAdvance: true,
             id: 'extract_intention',
-            nextStep: 'validate_intention',
-            name: 'Clasificación de Intención del Usuario',
-            timeout: 10000, // 10 segundos para clasificación
-            description: 'Clasifica la intención del usuario usando el servicio de IA especializado',
+            timeout: 10000, // 10 segundos para clasificación completa
+            name: 'Clasificación y Validación de Intención del Usuario',
+            description: 'Clasifica la intención del usuario y valida su confianza para determinar el siguiente paso',
             execute: async (context) => {
                 try {
                     console.log('🤖 Clasificando intención del usuario...');
@@ -121,28 +169,50 @@ export class ReceptionFlow {
                     const classification = await this.intentionClassifier.classifyConversation(context.conversation.id);
 
                     if (!classification) {
+                        console.log('❌ No se pudo clasificar la intención, solicitando clarificación');
                         return {
-                            data: {},
-                            completed: false,
-                            error: 'No se pudo clasificar la intención del usuario',
+                            completed: true,
+                            nextStep: 'ask_for_clarification',
+                            data: {
+                                classification_failed: true,
+                                needs_clarification: true
+                            }
                         };
                     }
 
                     console.log(`✅ Intención clasificada: ${classification.code} (confianza: ${(classification.confidence * 100).toFixed(1)}%)`);
 
+                    // Validar la clasificación usando la utilidad integrada
+                    const validation = IntentionValidationUtil.validateAndRoute(classification);
+
+                    console.log(`🔍 Validación: ${validation.isValid ? '✅ Válida' : '⚠️ Necesita clarificación'} (prioridad: ${validation.priority})`);
+
                     return {
                         completed: true,
-                        data: { classified_intention: classification }
+                        nextStep: validation.nextStep,
+                        data: {
+                            classified_intention: classification,
+                            intention_id: classification.intentionId,
+                            intention_code: classification.code,
+                            confidence: classification.confidence,
+                            validation_passed: validation.isValid,
+                            intention_priority: validation.priority,
+                            needs_clarification: validation.needsClarification
+                        }
                     };
 
                 } catch (error) {
                     const err = error instanceof Error ? error : new Error(String(error));
-                    console.error('Error clasificando intención:', err);
+                    console.error('Error en clasificación de intención:', err);
 
                     return {
-                        data: {},
-                        completed: false,
-                        error: `Error en clasificación de intención: ${err.message}`,
+                        completed: true,
+                        nextStep: 'ask_for_clarification',
+                        data: {
+                            classification_error: true,
+                            needs_clarification: true,
+                            error_message: err.message
+                        }
                     };
                 }
             }
@@ -150,174 +220,59 @@ export class ReceptionFlow {
     }
 
     /**
-     * Paso 4: Validación de la intención clasificada
+     * Paso 4: Transferencia automática al flujo especializado
     */
-    private createIntentionValidationStep(): StepDefinition {
+    private createFlowTransferStep(): StepDefinition {
         return {
-            retries: 0,
-            autoAdvance: true,
-            id: 'validate_intention',
-            timeout: 2000, // Validación rápida
+            retries: 1,
+            id: 'transfer_to_specialized_flow',
             requiredData: ['classified_intention'],
-            name: 'Validación de Intención Clasificada',
-            description: 'Valida si la intención clasificada tiene suficiente confianza para continuar',
+            name: 'Transferencia Automática a Flujo Especializado',
+            autoAdvance: false, // No envía mensajes, delega al nuevo flujo
+            timeout: 10000, // Tiempo suficiente para inicializar nuevo flujo
+            description: 'Transfiere automáticamente al flujo especializado correspondiente usando lógica centralizada',
             execute: async (context) => {
                 try {
                     const collectedData = context.collectedData;
                     const classifiedIntention = collectedData.classified_intention as IntentionClassification;
 
-                    console.log(`🔍 Validando intención: ${classifiedIntention?.code} (confianza: ${(classifiedIntention.confidence * 100).toFixed(1)}%)`);
+                    console.log(`🔄 Transfiriendo automáticamente a flujo especializado para intención: ${classifiedIntention.code} (ID: ${classifiedIntention.intentionId})`);
 
-                    // Umbrales de confianza por tipo de intención
-                    const confidenceThresholds = {
-                        'low': 0.4,      // Intenciones básicas (saludos, general)
-                        'medium': 0.6,   // Intenciones normales (consultas, citas)
-                        'high': 0.8,     // Intenciones críticas (compras, soporte urgente)
-                    };
-
-                    // Determinar prioridad de la intención
-                    const intentionPriority = this.getIntentionPriority(classifiedIntention?.code);
-                    const minConfidence = confidenceThresholds[intentionPriority];
-
-                    if (classifiedIntention.confidence >= minConfidence) {
-                        console.log(`✅ Intención validada con confianza suficiente (${classifiedIntention.confidence} >= ${minConfidence})`);
-
-                        return {
-                            completed: true,
-                            nextStep: 'transfer_to_specialized_flow',
-                            data: {
-                                validation_passed: true,
-                                intention_priority: intentionPriority
-                            }
-                        };
-                    } else {
-                        console.log(`⚠️ Intención con baja confianza (${classifiedIntention.confidence} < ${minConfidence}), solicitando clarificación`);
-
-                        return {
-                            completed: true,
-                            nextStep: 'ask_for_clarification',
-                            data: {
-                                validation_passed: false,
-                                needs_clarification: true,
-                                intention_priority: intentionPriority,
-                            }
-                        };
-                    }
-
-                } catch (error) {
-                    const err = error instanceof Error ? error : new Error(String(error));
-                    console.error('Error en validación de intención:', err);
-
-                    return {
-                        completed: false,
-                        error: `Error en validación: ${err.message}`,
-                        nextStep: 'ask_for_clarification',
-                        data: {
-                            validation_error: true
-                        }
-                    };
-                }
-            }
-        };
-    }
-
-    /**
-     * Determina la prioridad de una intención para ajustar umbrales de confianza
-    */
-    private getIntentionPriority(intentionCode: string): 'high' | 'medium' | 'low' {
-        const highPriorityIntentions = ['buy_intent', 'support_request'];
-        const mediumPriorityIntentions = ['schedule_appointment', 'product_question'];
-        const lowPriorityIntentions = ['general_inquiry', 'follow_up'];
-
-        if (highPriorityIntentions.includes(intentionCode)) return 'high';
-        if (mediumPriorityIntentions.includes(intentionCode)) return 'medium';
-        return 'low';
-    }
-
-    /**
-     * Paso 5: Transferencia al flujo especializado apropiado
-    */
-    private createFlowTransferStep(): StepDefinition {
-        return {
-            id: 'transfer_to_specialized_flow',
-            name: 'Transferencia a Flujo Especializado',
-            timeout: 5000,
-            retries: 1,
-            description: 'Determina el flujo especializado apropiado basado en la intención clasificada',
-            requiredData: ['classified_intention', 'intention_code'],
-            autoAdvance: false, // Este paso SÍ debe enviar mensaje al usuario
-            execute: async (context) => {
-                try {
-                    const collectedData = context.collectedData;
-                    const intentionCode = collectedData.intention_code as string;
-                    const confidence = collectedData.confidence as number;
-
-                    console.log(`🔀 Transfiriendo a flujo especializado para intención: ${intentionCode}`);
-
-                    // Mapear intenciones a flujos especializados
-                    const flowMapping = {
-                        'buy_intent': {
-                            flowName: 'Seller Flow',
-                            message: `Perfecto, veo que estás interesado en realizar una compra. Te conectaré con nuestro especialista en ventas que te ayudará con todo el proceso.`,
-                            priority: 'high'
+                    // Usar lógica centralizada del workflow engine para cambiar de flujo
+                    // Esto inicializará el workflow correcto y ejecutará su primer paso
+                    await this.workflowEngine.switchToFlow(
+                        {
+                            ...context.conversation, 
+                            workflow_state: {
+                                ...context.conversation.workflow_state as WorkflowState,
+                                flowName: undefined
+                            },
+                            intention_id: classifiedIntention.intentionId
                         },
-                        'schedule_appointment': {
-                            flowName: 'Booking Flow',
-                            message: `Entiendo que deseas agendar una cita o reunión. Te ayudaré a encontrar el horario perfecto para ti.`,
-                            priority: 'medium'
-                        },
-                        'support_request': {
-                            flowName: 'Support Flow',
-                            message: `Lamento cualquier inconveniente. Nuestro equipo de soporte técnico te asistirá inmediatamente.`,
-                            priority: 'high'
-                        },
-                        'product_question': {
-                            flowName: 'Inquiry Flow',
-                            message: `Excelente pregunta sobre nuestros productos. Te proporcionaré toda la información que necesitas.`,
-                            priority: 'medium'
-                        },
-                        'general_inquiry': {
-                            flowName: 'Inquiry Flow',
-                            message: `Hola, soy tu asistente de Axi Connect. ¿En qué puedo ayudarte hoy?`,
-                            priority: 'low'
-                        },
-                        'follow_up': {
-                            flowName: 'Retention Flow',
-                            message: `¡Gracias por contactarnos nuevamente! Es un placer atenderte.`,
-                            priority: 'low'
-                        }
-                    };
+                        context.message
+                    );
 
-                    const flowConfig = flowMapping[intentionCode as keyof typeof flowMapping] || {
-                        flowName: 'Inquiry Flow',
-                        message: `Hola, soy tu asistente de Axi Connect. ¿En qué puedo ayudarte hoy?`,
-                        priority: 'low'
-                    };
-
-                    console.log(`📋 Flujo asignado: ${flowConfig.flowName} (prioridad: ${flowConfig.priority})`);
+                    console.log(`✅ Transferencia completada - Nuevo flujo activo para conversación ${context.conversation.id}`);
 
                     return {
                         completed: true,
-                        shouldSendMessage: true,
-                        message: flowConfig.message,
                         data: {
-                            target_flow: flowConfig.flowName,
-                            flow_priority: flowConfig.priority,
-                            transfer_reason: `Intención clasificada: ${intentionCode} (${(confidence * 100).toFixed(1)}% confianza)`
+                            flow_transfer_completed: true,
+                            transferred_at: new Date().toISOString(),
+                            transferred_to_intention: classifiedIntention.code,
                         }
                     };
 
                 } catch (error) {
                     const err = error instanceof Error ? error : new Error(String(error));
-                    console.error('Error en transferencia de flujo:', err);
+                    console.error('Error en transferencia automática de flujo:', err);
 
                     return {
                         completed: false,
-                        error: `Error en transferencia: ${err.message}`,
-                        shouldSendMessage: true,
-                        message: 'Disculpa, tuve un problema al procesar tu solicitud. ¿Puedes intentar nuevamente?',
+                        error: `Error en transferencia automática: ${err.message}`,
                         data: {
-                            transfer_error: true
+                            flow_transfer_error: true,
+                            error_details: err.message
                         }
                     };
                 }
@@ -364,7 +319,11 @@ export class ReceptionFlow {
 }
 
 // Factory function para crear el flujo fácilmente
-export function createReceptionFlow(aiService: AIService, intentionClassifier: IntentionClassifierService): FlowDefinition {
-    const receptionFlow = new ReceptionFlow(aiService, intentionClassifier);
+export function createReceptionFlow(
+    aiService: AIService,
+    intentionClassifier: IntentionClassifierService,
+    workflowEngine: WorkflowEngineService
+): FlowDefinition {
+    const receptionFlow = new ReceptionFlow(aiService, intentionClassifier, workflowEngine);
     return receptionFlow.createFlow();
 }

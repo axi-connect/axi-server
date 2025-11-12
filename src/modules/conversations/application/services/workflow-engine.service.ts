@@ -55,12 +55,12 @@ export class WorkflowEngineService {
         // Requiere intención y agente asignado
         if (!conversation.intention_id || !conversation.assigned_agent_id) return null;
 
-        // Obtener intención y agente para determinar el flow
-        const intentions = await this.parametersRepository.getIntention([conversation.intention_id])
-
+        // Obtener intención para determinar el flow
+        const intentions = await this.parametersRepository.getIntention([conversation.intention_id]);
+     
         const {flow_name} = intentions[0];
         if (!flow_name) return null;
-
+     
         const initialState: WorkflowState = {
             collectedData: {},
             completedSteps: [],
@@ -69,7 +69,7 @@ export class WorkflowEngineService {
             intentionId: conversation.intention_id,
             agentId: conversation.assigned_agent_id
         };
-
+     
         // Persistir estado inicial
         conversation.workflow_state = initialState;
         await this.updateWorkflowState(conversation, initialState);
@@ -144,35 +144,7 @@ export class WorkflowEngineService {
             if (!state) return;
         }
 
-        // Obtener definición del flujo
-        const flow = this.flowRegistry.getFlow(state.flowName!);
-        if (!flow) {
-            console.error(`Flujo '${state.flowName}' no encontrado para conversación ${conversation.id}`);
-            return;
-        }
-
-        // Encontrar el paso actual
-        const currentStepId = state.currentStep || flow.initialStep;
-        const currentStep = flow.steps.find(step => step.id === currentStepId);
-
-        if (!currentStep) {
-            console.error(`Paso '${currentStepId}' no encontrado en flujo '${flow.name}'`);
-            return;
-        }
-
-        try {
-            // Ejecutar el paso actual y manejar avance automático
-            await this.executeStep(conversation, message, flow, currentStep, state);
-        } catch (error) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            console.error(`Error ejecutando paso '${currentStepId}' en flujo '${flow.name}':`, err);
-
-            // Marcar como fallido
-            await this.updateWorkflowState(conversation, {
-                status: 'failed',
-                error: err.message
-            });
-        }
+        await this.switchToFlow(conversation, message);
     }
 
     /**
@@ -196,6 +168,8 @@ export class WorkflowEngineService {
             collectedData: state.collectedData || {}
         };
 
+        console.log('📚 Collected data:', context.collectedData);
+
         // Ejecutar el paso
         const result = await this.stepExecutor.executeStep(currentStep, context);
 
@@ -208,6 +182,7 @@ export class WorkflowEngineService {
 
             // Marcar paso como completado
             state = await this.completeStep(conversation, currentStep, result) || state;
+            conversation.workflow_state = state;
 
             // Enviar mensaje si el paso lo indica
             if (result.shouldSendMessage && result.message) {
@@ -245,6 +220,55 @@ export class WorkflowEngineService {
                 error: result.error
             });
             console.error(`Error en paso '${currentStepId}' del flujo '${flow.name}': ${result.error}`);
+        }
+    }
+
+    /**
+     * Cambia dinámicamente el flujo de una conversación basado en nueva intención
+    */
+    async switchToFlow(
+        conversation: ConversationEntity,
+        message: MessageEntity
+    ): Promise<void> {
+        console.log(`🔄 Cambiando flujo para conversación ${conversation.id} basado en intención ${conversation.intention_id}`);
+
+        const state = conversation.workflow_state as WorkflowState;
+        
+        if(!state.flowName) {
+            // Obtener intención para determinar el flow
+            const intentions = await this.parametersRepository.getIntention([conversation.intention_id]);
+            const {flow_name} = intentions[0];
+            state.flowName = flow_name;
+        }
+
+        // Obtener la definición del flujo
+        const flow = this.flowRegistry.getFlow(state.flowName);
+        if (!flow) {
+            console.error(`Flujo '${state.flowName}' no encontrado`);
+            return;
+        }
+
+        // Encontrar el paso actual
+        const currentStepId = state.currentStep || flow.initialStep;
+        const currentStep = flow.steps.find(step => step.id === currentStepId);
+
+        if (!currentStep) {
+            console.error(`Paso '${currentStepId}' no encontrado en flujo '${flow.name}'`);
+            return;
+        }
+
+        try {
+            // Ejecutar el paso actual y manejar avance automático
+            await this.executeStep(conversation, message, flow, currentStep, state);
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error(`Error ejecutando paso '${currentStepId}' en flujo '${flow.name}':`, err);
+
+            // Marcar como fallido
+            await this.updateWorkflowState(conversation, {
+                status: 'failed',
+                error: err.message
+            });
         }
     }
 

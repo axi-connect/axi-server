@@ -7,7 +7,7 @@ import { MessageRepository } from '../repositories/message.repository.js';
 import { MessageUseCases } from '../../application/use-cases/message.usecases.js';
 import { ConversationController } from '../controllers/conversation.controller.js';
 import { ConversationUseCases } from '../../application/use-cases/conversation.usecases.js';
-import { ChannelsContainer } from '@/modules/channels/infrastructure/channels.container.js';
+import { ChannelsContainer } from '@/modules/channels/infrastructure/channels.container_old.js';
 import { AgentsRepository } from '@/modules/identities/agents/infrastructure/agents.repository.js';
 import { ChannelRepository } from '@/modules/channels/infrastructure/repositories/channel.repository.js';
 import { CompaniesRepository } from '@/modules/identities/companies/infrastructure/companies.repository.js';

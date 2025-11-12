@@ -167,7 +167,6 @@ export class WhatsappProvider extends BaseProvider {
     // Manejar mensajes salientes desde el dispositivo
     this.client.on('message_create', async (message: Message) => {
       try {
-        console.log('event message_create is activated 🚨🚨');
         if (message.fromMe && this.messageHandler){
           await this.messageHandler({
             contact: {

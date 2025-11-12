@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authorize } from '@/middlewares/rbac.middleware.js';
 import { validateIdParam } from '@/shared/validators.shared.js';
-import { ChannelsContainer } from '@/modules/channels/infrastructure/channels.container.js';
+import { ChannelsContainer } from '@/modules/channels/infrastructure/channels.container_old.js';
 import { MessageUseCases } from '@/modules/conversations/application/use-cases/message.usecases.js';
 import { MessageValidator } from '@/modules/conversations/infrastructure/validators/message.validator.js';
 import { MessageController } from '@/modules/conversations/infrastructure/controllers/message.controller.js';
