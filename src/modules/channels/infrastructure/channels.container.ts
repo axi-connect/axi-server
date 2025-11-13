@@ -1,7 +1,7 @@
 import { Server } from 'socket.io';
 import { PrismaClient } from '@prisma/client';
-import { getRedisClient } from '@/database/redis.js';
-import { createContainer, asClass, asValue, InjectionMode } from 'awilix';
+import { getRedisClient, RedisClient } from '@/database/redis.js';
+import { createContainer, asClass, asValue, InjectionMode, AwilixContainer, asFunction } from 'awilix';
 
 
 // Repositories
@@ -33,45 +33,73 @@ import { ChannelUseCases } from '../application/use-cases/channel.usecases.js';
 import { ChannelAuthUseCases } from '../application/use-cases/channel-auth.usecases.js';
 import { createReceptionFlow } from '@/modules/conversations/domain/flows/reception.flow.js';
 
-export function createChannelsContainer(io: Server) {
-    const container = createContainer({
-        injectionMode: InjectionMode.PROXY
-    });
+export type ChannelContainer = AwilixContainer<ChannelsContainerDependencies>;
 
+type ChannelsContainerDependencies = {
+    io: Server;
+    prisma: PrismaClient;
+    aiService: AIService;
+    redisClient: RedisClient;
+    channelUseCases: ChannelUseCases;
+    flowRegistry: FlowRegistryService;
+    stepExecutor: StepExecutorService;
+    agentsRepository: AgentsRepository;
+    agentMatching: AgentMatchingService;
+    messageRepository: MessageRepository;
+    channelRepository: ChannelRepository;
+    workflowEngine: WorkflowEngineService;
+    messageRouting: MessageRoutingService;
+    authSessionService: AuthSessionService;
+    channelAuthUseCases: ChannelAuthUseCases;
+    companiesRepository: CompaniesRepository;
+    messageIngestion: MessageIngestionService;
+    webSocketGateway: ChannelWebSocketGateway;
+    parametersRepository: ParametersRepository;
+    conversationResolver: ConversationResolver;
+    credentialRepository: CredentialRepository;
+    channelRuntimeService: ChannelRuntimeService;
+    conversationRepository: ConversationRepository;
+    intentionClassifier: IntentionClassifierService;
+    conversationOrchestrator: ConversationOrchestratorService;
+}
+
+let containerInstance: ChannelContainer;
+
+function createChannelsContainer(io: Server) {
+    const container = createContainer<ChannelsContainerDependencies>({ injectionMode: InjectionMode.CLASSIC });
     // Paso 1: Registrar dependencias
     container.register({
         // Infrastructure
-        prisma: asValue(new PrismaClient()),
-        redisClient: asValue(getRedisClient()),
         io: asValue(io),
+        prisma: asValue(new PrismaClient()),
 
         // Repositories
+        agentsRepository: asClass(AgentsRepository).singleton(),
+        messageRepository: asClass(MessageRepository).singleton(),
         channelRepository: asClass(ChannelRepository).singleton(),
+        companiesRepository: asClass(CompaniesRepository).singleton(),
+        parametersRepository: asClass(ParametersRepository).singleton(),
         credentialRepository: asClass(CredentialRepository).singleton(),
         conversationRepository: asClass(ConversationRepository).singleton(),
-        messageRepository: asClass(MessageRepository).singleton(),
-        agentsRepository: asClass(AgentsRepository).singleton(),
-        parametersRepository: asClass(ParametersRepository).singleton(),
-        companiesRepository: asClass(CompaniesRepository).singleton(),
 
         // Core Services
+        aiService: asFunction(() => new AIService()).singleton(),
         authSessionService: asClass(AuthSessionService).singleton(),
-        channelRuntimeService: asClass(ChannelRuntimeService).singleton(),
         webSocketGateway: asClass(ChannelWebSocketGateway).singleton(),
-        aiService: asClass(AIService).singleton(),
+        channelRuntimeService: asClass(ChannelRuntimeService).singleton(),
 
         // Workflow Services
         flowRegistry: asClass(FlowRegistryService).singleton(),
         stepExecutor: asClass(StepExecutorService).singleton(),
+        agentMatching: asClass(AgentMatchingService).singleton(),
         workflowEngine: asClass(WorkflowEngineService).singleton(),
         intentionClassifier: asClass(IntentionClassifierService).singleton(),
-        agentMatching: asClass(AgentMatchingService).singleton(),
         conversationOrchestrator: asClass(ConversationOrchestratorService).singleton(),
 
         // Message Services
+        messageRouting: asClass(MessageRoutingService).singleton(),
         messageIngestion: asClass(MessageIngestionService).singleton(),
         conversationResolver: asClass(ConversationResolver).singleton(),
-        messageRouting: asClass(MessageRoutingService).singleton(),
 
         // Use Cases
         channelUseCases: asClass(ChannelUseCases).singleton(),
@@ -81,10 +109,12 @@ export function createChannelsContainer(io: Server) {
     // Paso 2: Inicialización post-registro (para dependencias circulares)
     const messageRouting:MessageRoutingService = container.resolve('messageRouting');
     const webSocketGateway:ChannelWebSocketGateway = container.resolve('webSocketGateway');
-    const runtimeService:ChannelRuntimeService = container.resolve('channelRuntimeService');
-    
-    runtimeService.setWebSocketCallback((event) => webSocketGateway.handleWebSocketEvent(event));
-    runtimeService.setMessageRouterService(messageRouting);
+    const channelRuntimeService:ChannelRuntimeService = container.resolve('channelRuntimeService');
+    const conversationOrchestrator:ConversationOrchestratorService = container.resolve('conversationOrchestrator');
+    conversationOrchestrator.setWebSocketEventEmitter((event) => webSocketGateway.handleWebSocketEvent(event));
+    messageRouting.setWebSocketEventEmitter((event) => webSocketGateway.handleWebSocketEvent(event));
+    channelRuntimeService.setWebSocketCallback((event) => webSocketGateway.handleWebSocketEvent(event));
+    channelRuntimeService.setMessageRouterService(messageRouting);
 
     // Paso 3: Registrar flows
     const flowRegistry = container.resolve<FlowRegistryService>('flowRegistry');
@@ -94,5 +124,23 @@ export function createChannelsContainer(io: Server) {
     
     flowRegistry.registerFlow(createReceptionFlow(aiService, intentionClassifier, workflowEngine));
 
+    containerInstance = container;
     return container;
+}
+
+export function initializeContainer(io: Server): AwilixContainer {
+    if (containerInstance) throw new Error('Container already initialized');
+    return createChannelsContainer(io);
+}
+
+export function getContainer(): ChannelContainer {
+    if (!containerInstance) throw new Error('Container not initialized. Call initializeContainer(io) first.');
+    return containerInstance;
+}
+
+// Helper para resolver dependencias directamente
+export function resolve<T>(key: string): T {
+    const container = getContainer();
+    if (!container) throw new Error('Container not initialized. Call initializeContainer(io) first.');
+    return container.resolve<T>(key);
 }

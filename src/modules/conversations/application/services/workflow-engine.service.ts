@@ -40,7 +40,7 @@ export class WorkflowEngineService {
     constructor(
         private readonly conversationRepository: ConversationRepositoryInterface,
         private readonly parametersRepository: ParametersRepository,
-        private readonly channelRuntime: ChannelRuntimeService,
+        private readonly channelRuntimeService: ChannelRuntimeService,
         private readonly flowRegistry: FlowRegistryService,
         private readonly stepExecutor: StepExecutorService,
     ) {}
@@ -111,7 +111,7 @@ export class WorkflowEngineService {
         if (!current) return null;
 
         // Evitar repetir pasos ya completados
-        if (current.completedSteps.includes(step.id)) return current;
+        // if (current.completedSteps.includes(step.id)) throw new Error('Paso ya completado');
 
         // Determinar siguiente paso
         let nextStepId = result.nextStep;
@@ -155,7 +155,7 @@ export class WorkflowEngineService {
         message: MessageEntity,
         flow: FlowDefinition,
         currentStep: StepDefinition,
-        state: WorkflowState
+        workflowState: WorkflowState
     ): Promise<void> {
         const currentStepId = currentStep.id;
 
@@ -165,7 +165,7 @@ export class WorkflowEngineService {
             conversation,
             companyId: conversation.company_id,
             channelId: conversation.channel_id,
-            collectedData: state.collectedData || {}
+            collectedData: workflowState.collectedData || {}
         };
 
         console.log('📚 Collected data:', context.collectedData);
@@ -181,7 +181,8 @@ export class WorkflowEngineService {
             }
 
             // Marcar paso como completado
-            state = await this.completeStep(conversation, currentStep, result) || state;
+            const state = await this.completeStep(conversation, currentStep, result);
+            if (!state) throw new Error('Error al marcar paso como completado');
             conversation.workflow_state = state;
 
             // Enviar mensaje si el paso lo indica
@@ -233,7 +234,7 @@ export class WorkflowEngineService {
         console.log(`🔄 Cambiando flujo para conversación ${conversation.id} basado en intención ${conversation.intention_id}`);
 
         const state = conversation.workflow_state as WorkflowState;
-        
+
         if(!state.flowName) {
             // Obtener intención para determinar el flow
             const intentions = await this.parametersRepository.getIntention([conversation.intention_id]);
@@ -308,7 +309,7 @@ export class WorkflowEngineService {
             };
 
             // Enviar mensaje a través del runtime
-            const result = await this.channelRuntime.emitMessage(messageInput);
+            const result = await this.channelRuntimeService.emitMessage(messageInput);
 
             if (!result.success) {
                 console.error(`Error enviando mensaje del workflow: ${result.error}`);

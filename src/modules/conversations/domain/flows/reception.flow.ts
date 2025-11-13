@@ -6,7 +6,7 @@ import { type IntentionClassification, IntentionClassifierService } from '../../
 
 /**
  * Utilidad para validación y clasificación de intenciones
- */
+*/
 class IntentionValidationUtil {
     /**
      * Valida la confianza de una intención clasificada y determina el siguiente paso
@@ -28,7 +28,7 @@ class IntentionValidationUtil {
         // Determinar prioridad de la intención
         const priority = this.getIntentionPriority(classification.code);
         const minConfidence = confidenceThresholds[priority];
-        const isValid = classification.confidence >= minConfidence;
+        const isValid = (classification.confidence >= minConfidence) && classification.code !== 'general_inquiry';
         const needsClarification = !isValid;
 
         return {
@@ -95,6 +95,9 @@ export class ReceptionFlow {
 
                 // PASO 3: Clasificación y validación integrada de intención
                 this.createInitialIntentionExtractionStep(),
+
+                // PASO 4: Pedir clarificación si la intención no es clara
+                this.createAskClarificationStep(),
 
                 // PASO 4: Transferencia al flujo especializado 
                 this.createFlowTransferStep()
@@ -192,9 +195,6 @@ export class ReceptionFlow {
                         nextStep: validation.nextStep,
                         data: {
                             classified_intention: classification,
-                            intention_id: classification.intentionId,
-                            intention_code: classification.code,
-                            confidence: classification.confidence,
                             validation_passed: validation.isValid,
                             intention_priority: validation.priority,
                             needs_clarification: validation.needsClarification
@@ -237,7 +237,6 @@ export class ReceptionFlow {
                     const classifiedIntention = collectedData.classified_intention as IntentionClassification;
 
                     console.log(`🔄 Transfiriendo automáticamente a flujo especializado para intención: ${classifiedIntention.code} (ID: ${classifiedIntention.intentionId})`);
-
                     // Usar lógica centralizada del workflow engine para cambiar de flujo
                     // Esto inicializará el workflow correcto y ejecutará su primer paso
                     await this.workflowEngine.switchToFlow(

@@ -38,15 +38,15 @@ export class ChannelWebSocketGateway {
   private channelNamespace: Namespace;
   private messageNamespace: Namespace;
 
-  constructor(private io: Server, private runtimeService: ChannelRuntimeService) {
+  constructor(private io: Server, private channelRuntimeService: ChannelRuntimeService) {
     // Crear middleware de autenticación
     this.socketAuthMiddleware = createSocketAuthMiddleware();
 
     // Crear handlers especializados
     this.authHandler = createAuthHandler();
     this.systemHandler = createSystemHandler();
-    this.channelHandler = createChannelHandler(runtimeService);
-    this.messageHandler = createMessageHandler(runtimeService);
+    this.channelHandler = createChannelHandler(channelRuntimeService);
+    this.messageHandler = createMessageHandler(channelRuntimeService);
 
     // Crear namespaces
     this.authNamespace = this.io.of(NAMESPACES.AUTH);

@@ -2,7 +2,8 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import { ChannelProvider } from '@prisma/client';
-import { RedisClient } from '@/database/redis.js';
+import { getRedisClient, RedisClient } from '@/database/redis.js';
+
 
 export interface AuthSession {
   id: string;
@@ -18,12 +19,10 @@ export interface AuthSession {
 }
 
 export class AuthSessionService {
-  private redisClient: RedisClient;
+  private redisClient: RedisClient = getRedisClient();
   private expireSessionTTL: number = 15 * 60 * 1000; // 15 minutes
 
-  constructor(redisClient?: RedisClient) {
-    this.redisClient = redisClient || new RedisClient();
-  }
+  constructor() {}
 
   /**
    * Crea una nueva sesión de autenticación serializada en Redis

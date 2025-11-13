@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { authorize } from '@/middlewares/rbac.middleware.js';
-import { ChannelsContainer } from '../channels.container_old.js';
+import { getContainer } from '../channels.container.js';
 import { ChannelValidator } from '../../shared/validators/channel.validator.js';
 import { ChannelController } from '@/modules/channels/infrastructure/controllers/channel.controller.js';
+import { ChannelUseCases } from '../../application/use-cases/channel.usecases.js';
 
 /**
  * Create and configure channel routes with proper dependency injection
  * @param prisma - Prisma client instance
- * @param runtimeService - Channel runtime service instance
+ * @param channelRuntimeService - Channel runtime service instance
  * @returns Configured channel router
 */
 export function createChannelRouter(): Router {
@@ -15,8 +16,8 @@ export function createChannelRouter(): Router {
   const channelRouter = Router();
 
   // Get dependencies from container
-  const container = ChannelsContainer.getInstance();
-  const channelUseCases = container.getChannelUseCases();
+  const container = getContainer();
+  const channelUseCases = container.resolve<ChannelUseCases>('channelUseCases');
 
   // Initialize controller with injected dependencies
   const channelController = new ChannelController(channelUseCases);

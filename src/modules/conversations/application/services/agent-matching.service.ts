@@ -1,4 +1,3 @@
-import { ChannelType } from '@prisma/client';
 import { getRedisClient } from '@/database/redis.js';
 import type { ConversationEntity } from '../../domain/entities/conversation.js';
 import { AgentsRepository } from '@/modules/identities/agents/infrastructure/agents.repository.js';
@@ -13,18 +12,14 @@ export interface AgentMatchOptions {
 
 export class AgentMatchingService {
     private readonly redis = getRedisClient();
-    private readonly cacheTtlSeconds: number;
-    private readonly maxCandidates: number;
+    private readonly maxCandidates: number = 50;
+    private readonly cacheTtlSeconds: number = 60 * 60 * 24; // 24 hours
 
     constructor(
         private readonly agentsRepository: AgentsRepository,
         private readonly conversationRepository: ConversationRepositoryInterface,
         private readonly channelRepository: ChannelRepositoryInterface,
-        options?: AgentMatchOptions
-    ) {
-        this.cacheTtlSeconds = options?.cacheTtlSeconds ?? 60;
-        this.maxCandidates = options?.maxCandidates ?? 50;
-    }
+    ) {}
 
     private buildLoadKey(agentId: number): string {
         return `agent:load:${agentId}`;
@@ -57,7 +52,7 @@ export class AgentMatchingService {
 
     /**
      * Encuentra un agente disponible por intención, canal y compañía con balanceo por carga.
-     */
+    */
     async matchAgentForConversation(
         conversation: ConversationEntity,
         intentionId: number,
@@ -88,7 +83,7 @@ export class AgentMatchingService {
 
     /**
      * Asigna el agente si no existe uno, actualiza contador de carga y retorna el id asignado.
-     */
+    */
     async assignIfNeeded(conversation: ConversationEntity, intentionId: number, options?: AgentMatchOptions): Promise<number | null> {
         const agentId = await this.matchAgentForConversation(conversation, intentionId, options);
         if (!agentId) return null;

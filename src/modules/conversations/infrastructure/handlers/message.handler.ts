@@ -35,7 +35,7 @@ export interface IncomingMessageData {
  * Gestiona envío y recepción de mensajes en tiempo real
 */
 export class MessageHandler {
-  constructor(private runtimeService: ChannelRuntimeService) {}
+  constructor(private channelRuntimeService: ChannelRuntimeService) {}
 
     /**
      * Configura el namespace de mensajes
@@ -117,6 +117,6 @@ export class MessageHandler {
 /**
  * Factory function para crear y configurar el handler de mensajes
 */
-export function createMessageHandler(runtimeService: ChannelRuntimeService): MessageHandler {
-  return new MessageHandler(runtimeService);
+export function createMessageHandler(channelRuntimeService: ChannelRuntimeService): MessageHandler {
+  return new MessageHandler(channelRuntimeService);
 }

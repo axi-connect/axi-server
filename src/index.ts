@@ -66,11 +66,12 @@ app.use('/parameters', ParametersRouter);
 
 // Inicializar servicios de infraestructura primero
 Promise.all([
-  initializeRedis(),
-  initializeChannelRuntime(io).then((result) => {
-    // Configurar Channels router con dependencias inicializadas
-    app.use('/channels', result.channelsRouter);
-    console.log('📡 Channels router configurado');
+  initializeRedis().then((client) => {
+    initializeChannelRuntime(io, client).then((result) => {
+      // Configurar Channels router con dependencias inicializadas
+      app.use('/channels', result.channelsRouter);
+      console.log('📡 Channels router configurado');
+    })
   })
 ]).then(() => {
   console.log('🚀 Todos los servicios de infraestructura inicializados');

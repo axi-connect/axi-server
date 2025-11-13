@@ -1,7 +1,5 @@
 import { Namespace } from 'socket.io';
-import { TokenService } from '../../../auth/application/token.service.js';
-import { AuthenticatedSocket, SocketAuthMiddleware } from './auth.middleware.js';
-import { ChannelRuntimeService } from '../../application/services/channel-runtime.service.js';
+import { AuthenticatedSocket } from './auth.middleware.js';
 
 /**
  * Interfaces para el handler de autenticación

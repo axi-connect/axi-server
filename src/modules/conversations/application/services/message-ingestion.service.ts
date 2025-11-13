@@ -7,17 +7,14 @@ import type { ConversationRepositoryInterface } from '@/modules/conversations/do
 
 export class MessageIngestionService {
   private readonly redis = getRedisClient();
-  private readonly maxMetadataBytes: number;
-  private readonly idempotencyTtlSeconds: number;
+  private readonly maxMetadataBytes: number = 32 * 1024; // 32KB
+  private readonly idempotencyTtlSeconds: number = 15 * 60; // 15 min
+  // options?: { idempotencyTtlSeconds?: number; maxMetadataBytes?: number }
 
   constructor(
     private readonly messageRepository: MessageRepositoryInterface,
     private readonly conversationRepository: ConversationRepositoryInterface,
-    options?: { idempotencyTtlSeconds?: number; maxMetadataBytes?: number }
-  ) {
-    this.idempotencyTtlSeconds = options?.idempotencyTtlSeconds ?? 15 * 60; // 15 min
-    this.maxMetadataBytes = options?.maxMetadataBytes ?? 32 * 1024; // 32KB
-  }
+  ) {}
 
   private buildIdemKey(channelId: string, providerMessageId: string): string {
     return `msg:idem:${channelId}:${providerMessageId}`;

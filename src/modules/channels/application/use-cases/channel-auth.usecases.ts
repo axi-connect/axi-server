@@ -35,11 +35,11 @@ export class ChannelAuthUseCases {
     private healthCheckService = new ProviderHealthCheckService();
 
     constructor(
-        private runtimeService: ChannelRuntimeService,
+        private channelRuntimeService: ChannelRuntimeService,
         private authSessionService: AuthSessionService,
         private channelRepository: ChannelRepositoryInterface,
         private credentialRepository: CredentialRepositoryInterface,
-        private companiesRepo?: { existsById(company_id: number): Promise<boolean> }
+        private companiesRepository?: { existsById(company_id: number): Promise<boolean> }
     ) {}
 
     /**
@@ -157,7 +157,7 @@ export class ChannelAuthUseCases {
         if (authSession?.status === 'completed') throw new HttpError(400, 'Channel is already authenticated');
 
         // Generar QR usando el runtime service
-        const qrResult = await this.runtimeService.generateQR(channelId);
+        const qrResult = await this.channelRuntimeService.generateQR(channelId);
 
         if (!qrResult || qrResult.length === 0) {
             // String vacío indica que ya está autenticado o listo
@@ -198,7 +198,7 @@ export class ChannelAuthUseCases {
         }
 
         // Validar que la empresa existe
-        const companyExists = this.companiesRepo ? await this.companiesRepo.existsById(input.company_id) : true;
+        const companyExists = this.companiesRepository ? await this.companiesRepository.existsById(input.company_id) : true;
         if (!companyExists) throw new HttpError(400, `La empresa con ID ${input.company_id} no existe`);
 
         // Verificar que la cuenta del proveedor no esté duplicada

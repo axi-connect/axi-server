@@ -27,7 +27,7 @@ export interface ChannelSearchInput {
 
 export class ChannelUseCases {
   constructor(
-    private runtimeService: ChannelRuntimeService,
+    private channelRuntimeService: ChannelRuntimeService,
     private channelAuthUseCases: ChannelAuthUseCases,
     private channelRepository: ChannelRepositoryInterface,
   ) {}
@@ -103,34 +103,34 @@ export class ChannelUseCases {
    * Inicia un canal en runtime
   */
   async startChannel(channelId: string): Promise<void> {
-    await this.runtimeService.startChannel(channelId);
+    await this.channelRuntimeService.startChannel(channelId);
   }
 
   /**
    * Detiene un canal en runtime
   */
   async stopChannel(channelId: string): Promise<void> {
-    await this.runtimeService.stopChannel(channelId);
+    await this.channelRuntimeService.stopChannel(channelId);
   }
 
   /**
    * Reinicia un canal en runtime
   */
   async restartChannel(channelId: string): Promise<void> {
-    await this.runtimeService.restartChannel(channelId);
+    await this.channelRuntimeService.restartChannel(channelId);
   }
 
   /**
    * Obtiene el estado de un canal
   */
   async getChannelStatus(channelId: string): Promise<any> {
-    return this.runtimeService.getChannelStatus(channelId);
+    return this.channelRuntimeService.getChannelStatus(channelId);
   }
 
   /**
    * Verifica si un canal está activo
   */
   isChannelActive(channelId: string): boolean {
-    return this.runtimeService.isChannelActive(channelId);
+    return this.channelRuntimeService.isChannelActive(channelId);
   }
 }

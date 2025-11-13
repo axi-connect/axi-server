@@ -6,10 +6,11 @@ import { MessageController } from '../controllers/message.controller.js';
 import { MessageRepository } from '../repositories/message.repository.js';
 import { MessageUseCases } from '../../application/use-cases/message.usecases.js';
 import { ConversationController } from '../controllers/conversation.controller.js';
+import { getContainer } from '@/modules/channels/infrastructure/channels.container.js';
 import { ConversationUseCases } from '../../application/use-cases/conversation.usecases.js';
-import { ChannelsContainer } from '@/modules/channels/infrastructure/channels.container_old.js';
 import { AgentsRepository } from '@/modules/identities/agents/infrastructure/agents.repository.js';
 import { ChannelRepository } from '@/modules/channels/infrastructure/repositories/channel.repository.js';
+import { ChannelRuntimeService } from '@/modules/channels/application/services/channel-runtime.service.js';
 import { CompaniesRepository } from '@/modules/identities/companies/infrastructure/companies.repository.js';
 import { ConversationValidator } from '@/modules/conversations/infrastructure/validators/conversation.validator.js';
 import { ConversationRepository } from '@/modules/conversations/infrastructure/repositories/conversation.repository.js';
@@ -25,12 +26,12 @@ export function createConversationRouter(prisma: PrismaClient): Router {
   const conversationRepository = new ConversationRepository(prisma);
 
   // Initialize use cases
+  const container = getContainer();
   const agentsRepository = new AgentsRepository();
-  const container = ChannelsContainer.getInstance();
-  const runtimeService = container.getRuntimeService();
   const companiesRepository = new CompaniesRepository();
   const channelRepository = new ChannelRepository(prisma);
-  const messageUseCases = new MessageUseCases(runtimeService, messageRepository);
+  const channelRuntimeService = container.resolve<ChannelRuntimeService>('channelRuntimeService');
+  const messageUseCases = new MessageUseCases(channelRuntimeService, messageRepository);
   const conversationUseCases = new ConversationUseCases(conversationRepository, messageRepository, companiesRepository, agentsRepository, channelRepository);
 
   // Initialize controllers

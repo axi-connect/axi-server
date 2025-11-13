@@ -38,7 +38,7 @@ export class ChannelHandler {
     private socketChannels = new Map<string, Set<string>>(); // socketId -> Set<channelIds>
     private connections = new Map<string, Set<AuthenticatedSocket>>();
 
-    constructor(private runtimeService: ChannelRuntimeService) {}
+    constructor(private channelRuntimeService: ChannelRuntimeService) {}
 
     /**
      * Configura el namespace de canales
@@ -102,7 +102,7 @@ export class ChannelHandler {
                 return;
             }
 
-            const status = await this.runtimeService.getChannelStatus(channelId);
+            const status = await this.channelRuntimeService.getChannelStatus(channelId);
 
             const response: ChannelStatusResponse = {
                 channelId,
@@ -320,6 +320,6 @@ export class ChannelHandler {
 /**
  * Factory function para crear y configurar el handler de canales
 */
-export function createChannelHandler(runtimeService: ChannelRuntimeService): ChannelHandler {
-  return new ChannelHandler(runtimeService);
+export function createChannelHandler(channelRuntimeService: ChannelRuntimeService): ChannelHandler {
+  return new ChannelHandler(channelRuntimeService);
 }

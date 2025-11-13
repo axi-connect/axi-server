@@ -19,7 +19,7 @@ import { BaseProvider, ProviderConfig, type ProviderResponse } from '@/modules/c
  * Mantiene instancias de providers en memoria y gestiona su ciclo de vida
 */
 export class ChannelRuntimeService {
-    private messageRouterService?: MessageRoutingService;
+    private messageRouting?: MessageRoutingService;
     private activeProviders = new Map<string, BaseProvider>();
     private webSocketCallback?: (event: WebSocketEvent) => void;
 
@@ -39,7 +39,7 @@ export class ChannelRuntimeService {
      * Configura el servicio de enrutamiento de mensajes
     */
     setMessageRouterService(service: MessageRoutingService): void {
-        this.messageRouterService = service;
+        this.messageRouting = service;
     }
 
     /**
@@ -282,7 +282,7 @@ export class ChannelRuntimeService {
             case ChannelProvider.DEFAULT:
                 const whatsappProvider = new WhatsappProvider(config, channel.id, this.authSessionService);
                 // Configurar manejador de mensajes
-                whatsappProvider.setMessageHandler(async (data) => await this.messageRouterService?.messageRouter(channel.id, data));
+                whatsappProvider.setMessageHandler(async (data) => await this.messageRouting?.messageRouter(channel.id, data));
                 // Inicializar el cliente de WhatsApp
                 const initialized = await whatsappProvider.initialize();
                 if (!initialized) throw new Error(`Error inicializando cliente para canal ${channel.id}`);

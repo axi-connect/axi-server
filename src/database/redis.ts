@@ -17,7 +17,7 @@ export class RedisClient {
 
   /**
    * Obtiene o crea la instancia del cliente Redis
-   */
+  */
   async getClient(): Promise<RedisClientType> {
     if (this.client && this.client.isOpen) return this.client;
 
@@ -64,7 +64,7 @@ export class RedisClient {
 
   /**
    * Configura los listeners de eventos para monitoreo
-   */
+  */
   private setupEventListeners(): void {
     if (!this.client) return;
 

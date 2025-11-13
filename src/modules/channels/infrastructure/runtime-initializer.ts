@@ -1,6 +1,8 @@
 import { Router } from 'express';
+import { RedisClient } from '@/database/redis.js';
 import { Server as SocketIOServer } from 'socket.io';
-import { ChannelsContainer } from './channels.container_old.js';
+import { ChannelContainer, initializeContainer } from './channels.container.js';
+import { ChannelRuntimeService } from '../application/services/channel-runtime.service.js';
 import { type ChannelWebSocketGateway } from '../application/services/channel-websocket.gateway.js';
 
 /**
@@ -9,18 +11,19 @@ import { type ChannelWebSocketGateway } from '../application/services/channel-we
 */
 export async function initializeChannelRuntime(io: SocketIOServer): Promise<{
   channelsRouter: Router;
-  container: ChannelsContainer;
+  container: ChannelContainer;
   webSocketGateway: ChannelWebSocketGateway;
 }> {
   console.log('🔧 Inicializando Channel Runtime Layer...');
 
   // Crear contenedor de dependencias centralizado
-  const container = ChannelsContainer.create(io);
-  const webSocketGateway = container.getWebSocketGateway();
+  const container: ChannelContainer = initializeContainer(io);
+  const webSocketGateway = container.resolve<ChannelWebSocketGateway>('webSocketGateway');
 
   // Inicializar canales activos automáticamente
   try {
-    await container.initializeActiveChannels();
+    const channelRuntimeService = container.resolve<ChannelRuntimeService>('channelRuntimeService');
+    await channelRuntimeService.initializeActiveChannels();
     console.log('✅ Canales activos inicializados');
   } catch (error) {
     console.error('⚠️ Error inicializando canales activos, continuando...', error);
@@ -30,7 +33,7 @@ export async function initializeChannelRuntime(io: SocketIOServer): Promise<{
   const cleanup = async () => {
     console.log('🧹 Limpiando recursos del Channel Runtime...');
     try {
-      await container.shutdown();
+      await container.resolve<ChannelRuntimeService>('channelRuntimeService').shutdown();
       console.log('✅ Recursos limpiados correctamente');
     } catch (error) {
       console.error('❌ Error limpiando recursos:', error);

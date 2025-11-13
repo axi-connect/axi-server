@@ -13,29 +13,18 @@ export type IntentionClassification = {
 
 type AiIntentionResponse = { intentionId?: number; code?: string; confidence?: number };
 
-type ClassifierOptions = {
-    maxHistory?: number;
-    aiTimeoutMs?: number;
-    cacheTtlSeconds?: number;
-};
-
 export class IntentionClassifierService {
-    private readonly ai: AIService;
-    private readonly maxHistory: number;
-    private readonly aiTimeoutMs: number;
-    private readonly cacheTtlSeconds: number;
+    private readonly maxHistory: number = 15;
     private readonly redis = getRedisClient();
+    private readonly aiTimeoutMs: number = 5000; // 5 segundos SLA IA fría
+    private readonly cacheTtlSeconds: number = 5 * 60; // 5 min
 
+    // options?: ClassifierOptions
     constructor(
+        private readonly aiService: AIService,
         private readonly messageRepository: MessageRepositoryInterface,
         private readonly parametersRepository: ParametersRepository,
-        options?: ClassifierOptions
-    ) {
-        this.maxHistory = options?.maxHistory ?? 15;
-        this.cacheTtlSeconds = options?.cacheTtlSeconds ?? 5 * 60; // 5 min
-        this.aiTimeoutMs = options?.aiTimeoutMs ?? 1500; // SLA IA fría
-        this.ai = new AIService();
-    }
+    ) {}
 
     private buildCacheKey(conversationId: string, lastMessageId: string | null): string {
         return lastMessageId
@@ -104,7 +93,7 @@ export class IntentionClassifierService {
         });
 
         // Ejecutar IA con timeout (SLA) usando API tipada
-        const AITask = this.ai.createJsonChat<AiIntentionResponse>(
+        const AITask = this.aiService.createJsonChat<AiIntentionResponse>(
             [{ role: 'system', content: prompt }],
             { temperature: 0, maxTokens: 256 }
         );

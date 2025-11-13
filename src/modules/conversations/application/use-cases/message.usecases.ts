@@ -7,7 +7,7 @@ import { MessageRepositoryInterface, MessageSearchCriteria } from '../../domain/
 
 export class MessageUseCases {
   constructor(
-    private runtimeService: ChannelRuntimeService,
+    private channelRuntimeService: ChannelRuntimeService,
     private messageRepository: MessageRepositoryInterface,
   ) {}
 
@@ -17,7 +17,7 @@ export class MessageUseCases {
    * @returns Mensaje creado
   */
   async sendMessage(input: MessageInput): Promise<ProviderResponse> {
-    return await this.runtimeService.emitMessage(input);
+    return await this.channelRuntimeService.emitMessage(input);
   }
 
   async getMessageById(id: string): Promise<MessageEntity> {

@@ -7,7 +7,7 @@ import { StepDefinition } from '../interfaces/workflow.interface.js';
 /**
  * Factory centralizada para crear pasos reutilizables
  * Proporciona una interfaz unificada para crear instancias de pasos comunes
- */
+*/
 export class StepFactory {
     private aiStep: AICommunicationStep;
     private dataStep: DataCollectionStep;

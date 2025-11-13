@@ -71,6 +71,7 @@ export class AgentsRepository implements AgentsRepositoryInterface{
             }),
             this.db.agent.count({ where })
         ]);
+        console.log('agents', agents)
         return {agents: agents as AgentSummaryDTO[], total};
     }
 

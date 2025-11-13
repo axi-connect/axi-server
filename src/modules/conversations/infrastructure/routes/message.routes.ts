@@ -2,9 +2,10 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authorize } from '@/middlewares/rbac.middleware.js';
 import { validateIdParam } from '@/shared/validators.shared.js';
-import { ChannelsContainer } from '@/modules/channels/infrastructure/channels.container_old.js';
+import { getContainer } from '@/modules/channels/infrastructure/channels.container.js';
 import { MessageUseCases } from '@/modules/conversations/application/use-cases/message.usecases.js';
 import { MessageValidator } from '@/modules/conversations/infrastructure/validators/message.validator.js';
+import { ChannelRuntimeService } from '@/modules/channels/application/services/channel-runtime.service.js';
 import { MessageController } from '@/modules/conversations/infrastructure/controllers/message.controller.js';
 import { MessageRepository } from '@/modules/conversations/infrastructure/repositories/message.repository.js';
 
@@ -18,9 +19,9 @@ export function createMessageRouter(prisma: PrismaClient): Router {
   const messageRepository = new MessageRepository(prisma);
 
   // Initialize use cases
-  const container = ChannelsContainer.getInstance();
-  const runtimeService = container.getRuntimeService();
-  const messageUseCases = new MessageUseCases(runtimeService, messageRepository);
+  const container = getContainer();
+  const channelRuntimeService = container.resolve<ChannelRuntimeService>('channelRuntimeService');
+  const messageUseCases = new MessageUseCases(channelRuntimeService, messageRepository);
 
   // Initialize controller
   const messageController = new MessageController(messageUseCases);

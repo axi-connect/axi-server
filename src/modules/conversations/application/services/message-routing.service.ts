@@ -1,16 +1,17 @@
 import { MessageDirection } from '@prisma/client';
 import { MessageIngestionService } from './message-ingestion.service.js';
 import { ConversationResolver } from './conversation-resolver.service.js';
-import { ConversationEntity, MessageHandlerData } from '../../domain/entities/conversation.js';
 import { MessageEntity, MessageInput } from '../../domain/entities/message.js';
 import { WebSocketEvent } from '@/modules/channels/domain/entities/channel.js';
 import { ConversationOrchestratorService } from './conversation-orchestrator.service.js';
+import { ConversationEntity, MessageHandlerData } from '../../domain/entities/conversation.js';
 
 export class MessageRoutingService {
+    private emitWebSocketEvent?: (event: WebSocketEvent) => void;
+
     constructor(
         private messageIngestion: MessageIngestionService,
         private conversationResolver: ConversationResolver,
-        private emitWebSocketEvent: (event: WebSocketEvent) => void,
         private conversationOrchestrator?: ConversationOrchestratorService
     ) {}
 
@@ -33,10 +34,11 @@ export class MessageRoutingService {
 
     public async handleIncomingMessage(channelId: string, { message, contact, conversation }: MessageHandlerData<MessageInput>): Promise<MessageEntity> {
         try {
+            console.log('Handling incoming message', message.direction);
             const savedMessage = await this.messageIngestion.ingest(message);
 
             // Emitir evento de mensaje recibido
-            this.emitWebSocketEvent({
+            this.emit({
                 channelId,
                 data: savedMessage,
                 event: 'message.received',
@@ -46,6 +48,7 @@ export class MessageRoutingService {
 
             // Coordinar intención → agente → workflow
             if (this.conversationOrchestrator) {
+                console.log('Processing incoming message', conversation?.id);
                 await this.conversationOrchestrator.processIncomingMessage({ conversation, message: savedMessage, contact });
             }
 
@@ -61,7 +64,7 @@ export class MessageRoutingService {
         try {
             const savedMessage = await this.messageIngestion.ingest(message);
 
-            this.emitWebSocketEvent({
+            this.emit({
                 channelId,
                 data: savedMessage,
                 event: 'message.sent',
@@ -74,5 +77,16 @@ export class MessageRoutingService {
             console.error(`❌ Error procesando mensaje en canal ${channelId}:`, error);
             throw error;
         }
+    }
+
+    /**
+     * Configura el callback para emitir eventos WebSocket
+    */
+    setWebSocketEventEmitter(emitter: (event: WebSocketEvent) => void): void {
+        this.emitWebSocketEvent = emitter;
+    }
+
+    private emit(event: WebSocketEvent): void {
+        if (this.emitWebSocketEvent) this.emitWebSocketEvent(event);
     }
 }

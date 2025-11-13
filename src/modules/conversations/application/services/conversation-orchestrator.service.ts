@@ -8,12 +8,13 @@ import { ConversationRepositoryInterface } from '../../domain/repositories/conve
 import { ChannelRuntimeService } from '@/modules/channels/application/services/channel-runtime.service.js';
 
 export class ConversationOrchestratorService {
+    private emitWebSocketEvent?: (event: WebSocketEvent) => void;
+    
     constructor(
         private agentMatching: AgentMatchingService,
         private workflowEngine: WorkflowEngineService,
         private intentionClassifier: IntentionClassifierService,
-        private channelRuntime: ChannelRuntimeService,
-        private emitWebSocketEvent: (event: WebSocketEvent) => void,
+        private channelRuntimeService: ChannelRuntimeService,
         public readonly conversationRepository: ConversationRepositoryInterface,
     ) {}
 
@@ -25,7 +26,7 @@ export class ConversationOrchestratorService {
         if (!conversation) throw new Error('Conversation not found');
 
         // Activar typing mientras procesa (experiencia más humana)
-        await this.channelRuntime.sendTyping(conversation.channel_id, contact.id);
+        await this.channelRuntimeService.sendTyping(conversation.channel_id, contact.id);
 
         try {
             // 1. Clasificar intención si no existe
@@ -89,7 +90,14 @@ export class ConversationOrchestratorService {
             throw error;
         } finally {
             // Siempre limpiar typing después de enviar mensaje
-            await this.channelRuntime.clearTyping(conversation.channel_id, conversation.contact_id!);
+            await this.channelRuntimeService.clearTyping(conversation.channel_id, conversation.contact_id!);
         }
+    }
+
+    /**
+     * Configura el callback para emitir eventos WebSocket
+    */
+    setWebSocketEventEmitter(emitter: (event: WebSocketEvent) => void): void {
+        this.emitWebSocketEvent = emitter;
     }
 }
