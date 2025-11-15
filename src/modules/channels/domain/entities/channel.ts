@@ -59,8 +59,10 @@ export type ChannelEvents =
 export type MessageEvents =
   | 'message.sent'
   | 'message.received'
+  | 'message.blocked'
   | 'intent.detected'
-  | 'agent.assigned';
+  | 'agent.assigned'
+  | 'firewall.blocked';
 
 export type SystemEvents = never; // Reservado para futuros eventos del sistema
 
@@ -74,8 +76,19 @@ export interface WebSocketEventDataMap {
   'channel.authenticated': { reason: string };
   'message.received': MessageEntity; // Mensaje persistido/ingestado
   'message.sent': { messageId: string; result?: unknown } | MessageEntity;
+  'message.blocked': MessageEntity; // Mensaje bloqueado por firewall
   'intent.detected': { conversation_id: string; intention_id: number; code: string; confidence: number };
   'agent.assigned': { conversation_id: string; agent_id: number; agent_name?: string };
+  'firewall.blocked': {
+    contactId: string;
+    violations: Array<{
+      type: string;
+      severity: string;
+      description: string;
+    }>;
+    riskScore: number;
+    cooldownSeconds?: number;
+  };
 }
 
 export interface WebSocketEvent<T extends WebSocketEventName = WebSocketEventName> {

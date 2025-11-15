@@ -113,7 +113,7 @@ export class RedisClient {
 
   /**
    * Obtiene el valor de una clave
-   */
+  */
   async get(key: string): Promise<string | null> {
     return this.executeCommand('get', key);
   }
@@ -127,42 +127,42 @@ export class RedisClient {
 
   /**
    * Verifica si una clave existe
-   */
+  */
   async exists(key: string): Promise<number> {
     return this.executeCommand('exists', key);
   }
 
   /**
    * Establece el tiempo de expiración de una clave
-   */
+  */
   async expire(key: string, ttlSeconds: number): Promise<number> {
     return this.executeCommand('expire', key, ttlSeconds);
   }
 
   /**
    * Obtiene todas las claves que coinciden con un patrón
-   */
+  */
   async keys(pattern: string): Promise<string[]> {
     return this.executeCommand('keys', pattern);
   }
 
   /**
    * Incrementa el valor de una clave numérica
-   */
+  */
   async incr(key: string): Promise<number> {
     return this.executeCommand('incr', key);
   }
 
   /**
    * Decrementa el valor de una clave numérica
-   */
+  */
   async decr(key: string): Promise<number> {
     return this.executeCommand('decr', key);
   }
 
   /**
    * Ejecuta múltiples comandos en una transacción
-   */
+  */
   async multi(commands: Array<{ command: string; args: any[] }>): Promise<any[]> {
     const client = await this.getClient();
     const multi = client.multi();

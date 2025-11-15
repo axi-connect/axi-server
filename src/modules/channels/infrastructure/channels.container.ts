@@ -23,6 +23,7 @@ import { StepExecutorService } from '@/modules/conversations/application/service
 import { AgentMatchingService } from '@/modules/conversations/application/services/agent-matching.service.js';
 import { WorkflowEngineService } from '@/modules/conversations/application/services/workflow-engine.service.js';
 import { MessageRoutingService } from '@/modules/conversations/application/services/message-routing.service.js';
+import { ConversationalFirewallService } from '@/modules/conversations/application/services/conversational-firewall.service.js';
 import { MessageIngestionService } from '@/modules/conversations/application/services/message-ingestion.service.js';
 import { ConversationResolver } from '@/modules/conversations/application/services/conversation-resolver.service.js';
 import { IntentionClassifierService } from '@/modules/conversations/application/services/intention-classifier.service.js';
@@ -97,7 +98,6 @@ function createChannelsContainer(io: Server) {
         conversationOrchestrator: asClass(ConversationOrchestratorService).singleton(),
 
         // Message Services
-        messageRouting: asClass(MessageRoutingService).singleton(),
         messageIngestion: asClass(MessageIngestionService).singleton(),
         conversationResolver: asClass(ConversationResolver).singleton(),
 
@@ -107,10 +107,21 @@ function createChannelsContainer(io: Server) {
     });
 
     // Paso 2: Inicialización post-registro (para dependencias circulares)
-    const messageRouting:MessageRoutingService = container.resolve('messageRouting');
     const webSocketGateway:ChannelWebSocketGateway = container.resolve('webSocketGateway');
     const channelRuntimeService:ChannelRuntimeService = container.resolve('channelRuntimeService');
     const conversationOrchestrator:ConversationOrchestratorService = container.resolve('conversationOrchestrator');
+    const messageIngestion:MessageIngestionService = container.resolve('messageIngestion');
+    const conversationResolver:ConversationResolver = container.resolve('conversationResolver');
+
+    // Crear firewall con configuración por defecto
+    const firewallConfig = ConversationalFirewallService.getDefaultConfig();
+    const messageRouting = new MessageRoutingService(
+        messageIngestion,
+        conversationResolver,
+        conversationOrchestrator,
+        firewallConfig
+    );
+    
     conversationOrchestrator.setWebSocketEventEmitter((event) => webSocketGateway.handleWebSocketEvent(event));
     messageRouting.setWebSocketEventEmitter((event) => webSocketGateway.handleWebSocketEvent(event));
     channelRuntimeService.setWebSocketCallback((event) => webSocketGateway.handleWebSocketEvent(event));

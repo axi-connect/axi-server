@@ -703,6 +703,161 @@ createFlowTransferStep(): StepDefinition {
 - 🔧 **Mantenibilidad**: Un solo lugar para lógica de routing
 - 📈 **Escalabilidad**: Fácil agregar nuevos flujos sin cambiar reception
 
+## 🛡️ **Firewall Conversacional - Protección Anti-Spam**
+
+### 🎯 **Objetivo General**
+Construir un sistema que bloquee spam (flooding, mensajes repetidos, alta frecuencia) mediante un **middleware inteligente** que protege la IA principal de ataques.
+
+### 🧠 **Principio Base**
+**Antes de enviar un mensaje a la IA principal** (que genera respuestas para el cliente), el sistema debe tener una **capa previa llamada "Firewall Conversacional"** que funciona como middleware inteligente.
+
+### 🏗️ **Arquitectura del Firewall**
+
+#### **1️⃣ Anti-Spam / Anti-Flood (Protección Dura)**
+
+**Fórmula Recomendada (Sliding Window Rate Limiting):**
+- **10 segundos**: Máximo 3 mensajes
+- **1 minuto**: Máximo 8 mensajes
+- **1 hora**: Máximo 30 mensajes
+- **24 horas**: Máximo 100 mensajes
+
+**Implementación Redis:**
+```typescript
+// Keys: user:{contactId}:messages:{window}
+// Values: sorted set con timestamps
+// TTL: automático según ventana
+
+// Ejemplo:
+// user:123456789:messages:10s → [timestamp1, timestamp2, timestamp3]
+// user:123456789:messages:1m → [timestamp1, timestamp2, ..., timestamp8]
+```
+
+**Respuesta a Exceso:**
+```typescript
+// Bloqueo progresivo: 30s → 2min → 5min → 15min
+// Mensaje neutral:
+"🤖 Parece que estás enviando mensajes muy rápido. Continuamos en un momento 🙌"
+```
+
+#### **2️⃣ Detección de Contenido Malicioso**
+- **Mensajes idénticos repetidos** (3+ veces consecutivas)
+- **URLs sospechosas** o dominios maliciosos
+- **Contenido ofensivo** o palabras prohibidas
+- **Longitud anormal** (muy corto o muy largo)
+
+#### **3️⃣ Análisis de Patrón Comportamental**
+- **Burst detection**: Muchos mensajes en poco tiempo
+- **Bot-like behavior**: Respuestas demasiado rápidas
+- **Session anomalies**: Cambios bruscos de comportamiento
+
+#### **4️⃣ Sistema de Penalización Inteligente**
+- **Puntuación de riesgo** por usuario
+- **Cooldown dinámico** basado en severidad
+- **Whitelist/blacklist** automática
+- **Reporting** para análisis manual
+
+### 📋 **Plan de Implementación Detallado**
+
+#### **Fase 1: Arquitectura Base del Firewall**
+1. **Crear Servicio Principal** (`ConversationalFirewallService`)
+2. **Implementar Rate Limiting** con Sliding Windows
+3. **Sistema de Penalización** básico
+4. **Integración** en MessageRoutingService
+
+#### **Fase 2: Rate Limiting Avanzado**
+1. **Sliding Window Algorithm** con Redis
+2. **Múltiples Ventanas** (10s, 1m, 1h, 24h)
+3. **Cooldown Progresivo** (30s → 2min → 5min → 15min)
+4. **Persistencia de Estado** de bloqueo
+
+#### **Fase 3: Detección de Contenido**
+1. **Análisis de Mensajes Repetidos** (3+ consecutivos)
+2. **Detección de URLs Sospechosas**
+3. **Filtro de Contenido Ofensivo**
+4. **Validación de Longitud** de mensajes
+
+#### **Fase 4: Sistema de Penalización Inteligente**
+1. **Puntuación de Riesgo** por usuario
+2. **Cooldown Dinámico** basado en severidad
+3. **Whitelist/Blacklist** automática
+4. **Métricas y Reporting**
+
+#### **Fase 5: Testing y Optimización**
+1. **Tests Unitarios** exhaustivos
+2. **Tests de Integración** con carga
+3. **Monitoreo de Performance**
+4. **Ajustes de Umbrales**
+
+### 📊 **Implementación Técnica**
+
+#### **Flujo de Protección:**
+```
+Mensaje Entrante → Firewall Conversacional → IA Principal
+                      ↓
+                ✅ Permitido → Procesar Normal
+                ❌ Bloqueado → Mensaje Neutro + Cooldown
+```
+
+#### **Componentes del Servicio:**
+
+```typescript
+class ConversationalFirewallService {
+    // Rate limiting con sliding windows
+    private rateLimiter: SlidingWindowRateLimiter;
+
+    // Detección de contenido
+    private contentAnalyzer: ContentAnalyzer;
+
+    // Sistema de penalización
+    private penaltySystem: PenaltySystem;
+
+    async checkMessage(contactId: string, message: string): Promise<FirewallResult> {
+        // 1. Rate limiting check
+        // 2. Content analysis
+        // 3. Behavioral analysis
+        // 4. Penalty assessment
+        // Return: ALLOW | BLOCK | WARN
+    }
+}
+```
+
+#### **Algoritmo de Rate Limiting (Sliding Window):**
+
+```typescript
+interface RateLimitRule {
+    windowSeconds: number;
+    maxRequests: number;
+    blockDurationSeconds: number;
+}
+
+const RATE_LIMIT_RULES: RateLimitRule[] = [
+    { windowSeconds: 10, maxRequests: 3, blockDurationSeconds: 30 },
+    { windowSeconds: 60, maxRequests: 8, blockDurationSeconds: 120 },
+    { windowSeconds: 3600, maxRequests: 30, blockDurationSeconds: 300 },
+    { windowSeconds: 86400, maxRequests: 100, blockDurationSeconds: 900 }
+];
+```
+
+#### **Estructura Redis:**
+```
+// Rate limiting keys
+user:{contactId}:messages:{window}s → sorted set de timestamps
+
+// Block keys
+user:{contactId}:blocked_until → timestamp
+user:{contactId}:violation_count → counter
+
+// Content analysis
+user:{contactId}:repeated_messages → hash de mensaje → count
+```
+
+### 🎯 **Beneficios Esperados**
+- ✅ **Protección DDoS**: Bloquea ataques automatizados
+- ✅ **Mejor Performance**: Reduce carga innecesaria en IA
+- ✅ **Costos Reducidos**: Menos tokens consumidos por spam
+- ✅ **Experiencia Mejorada**: Respuestas consistentes
+- ✅ **Seguridad Empresarial**: Protege infraestructura crítica
+
 ## 🚀 Próximas Expansiones
 
 - **Workflows configurables**: UI para diseñar flujos sin código
